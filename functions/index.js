@@ -282,7 +282,7 @@ exports.reservationReportsReset = functions.https.onRequest((req, res) => {
       sold: 0
     }
   };
-  
+
   ref.update(updatePathsAtOnce).then(function () {
     res.status(200).send("Write completed");
   }).catch(function (error) {
@@ -351,3 +351,105 @@ const getMapLotStatus = (mapLot, level) => {
 
 
 }
+
+
+exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
+  // identofy type_status_invetoriable to query
+  var toQuery = [
+    {
+      c0: 'lawnlots_hold_yes',
+      c1: 'lawnlots',
+      c2: 'hold'
+    },
+    {
+      c0: 'lawnlots_sold_yes',
+      c1: 'lawnlots',
+      c2: 'sold'
+    }
+
+  ]
+
+  // 'lawnlots_hold_yes',
+  // 'lawnlots_reserved_yes',
+  // 'lawnlots_sold_yes',
+  // 'lawnlots_available_yes',
+  // 'lawnlots_notyetavailable_yes',
+  // 'wallniche_hold_yes',
+  // 'wallniche_reserved_yes',
+  // 'wallniche_sold_yes',
+  // 'wallniche_available_yes',
+  // 'wallniche_notyetavailable_yes',    
+  // // ...  
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+
+  toQuery.forEach(que => {
+    // query to firebase
+    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
+      if (snapshot.exists()) {
+        admin.database().ref('/reports/dailyRunningTotal/' + serverDatePH_String + '/' + que.c1 + '/' + que.c2).transaction(qty => qty = snapshot.numChildren()).then(() => { });
+
+      }
+      else {
+        admin.database().ref('/reports/dailyRunningTotal/' + serverDatePH_String + '/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
+
+      }
+
+    });
+
+
+  });
+
+  res.status(200).send('ok:getDailyRunningTotal');
+
+});
+
+
+exports.dataCatchupLotTypeStatusInventoriable = functions.https.onRequest((req, res) => {
+  ref.child('lots').orderByChild('type_status_inventoriable').equalTo(null).limitToFirst(100).once('value').then(snapshot => {
+
+    if (snapshot.exists()) {
+
+      snapshot.forEach(element => {
+        // if (snapshot.val().type_status_inventoriable) {
+          admin.database().ref('/lots/' + element.key + '/type_status_inventoriable').transaction(val => val = element.val().type + '_' + element.val().status + '_' + element.val().inventoriable).then(() => { });
+        // }
+      });
+
+    }
+
+    res.status(200).send('ok.dataCatchupLotTypeStatusInventoriable:' + snapshot.numChildren());
+
+  });
+
+});
+
+
+exports.countLotInventoriable = functions.https.onRequest((req, res) => {
+  ref.child('lots').orderByChild('inventoriable').equalTo('yes').once('value').then(snapshot => {
+   
+    res.status(200).send('ok.countLot.inventoriable:' + snapshot.numChildren());
+  });
+
+});
+
+exports.countLotAll = functions.https.onRequest((req, res) => {
+  ref.child('lots').once('value').then(snapshot => {
+   
+    res.status(200).send('ok.countLot.all:' + snapshot.numChildren());
+  });  
+
+});
+
+
+exports.countLotAllLotTypeStatusInventoriable = functions.https.onRequest((req, res) => {
+  ref.child('lots').orderByChild('type_status_inventoriable').equalTo(null).once('value').then(snapshot => {
+
+    res.status(200).send('ok.countLotAllLotTypeStatusInventoriable:' + snapshot.numChildren());
+
+  });
+
+});
