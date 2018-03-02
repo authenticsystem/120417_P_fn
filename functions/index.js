@@ -479,7 +479,7 @@ const getMapLotStatus = (mapLot, level) => {
 }
 
 
-exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
+exports.getDailyRunningTotal_LawnLots = functions.https.onRequest((req, res) => {
   // identofy type_status_invetoriable to query
   var toQuery = [
     //lawnlots
@@ -497,17 +497,51 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
       c0: 'lawnlots_reserved_yes',
       c1: 'lawnlots',
       c2: 'reserved'
-    },
-    {
-      c0: 'lawnlots_available_yes',
-      c1: 'lawnlots',
-      c2: 'available'
-    },
-    {
-      c0: 'lawnlots_notyetavailable_yes',
-      c1: 'lawnlots',
-      c2: 'notyetavailable'
-    },
+    }
+  ]
+
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  toQuery.forEach(que => {
+    // query to firebase
+    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
+      if (snapshot.exists()) {
+        var numOfChildren = snapshot.numChildren();
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+
+        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
+        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
+        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
+      }
+      else {
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
+      }
+
+    });
+
+    console.log(que.c1 + '-' + que.c2 + ":ok")
+
+  })
+
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
+
+  res.status(200).send('ok:getDailyRunningTotal');
+
+});
+
+exports.getDailyRunningTotal_WallNiche = functions.https.onRequest((req, res) => {
+  // identofy type_status_invetoriable to query
+  var toQuery = [
     //wallniche
     {
       c0: 'wallniche_hold_yes',
@@ -523,43 +557,51 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
       c0: 'wallniche_reserved_yes',
       c1: 'wallniche',
       c2: 'reserved'
-    },
-    {
-      c0: 'wallniche_available_yes',
-      c1: 'wallniche',
-      c2: 'available'
-    },
-    {
-      c0: 'wallniche_notyetavailable_yes',
-      c1: 'wallniche',
-      c2: 'notyetavailable'
-    },
-    //cinerarium
-    {
-      c0: 'cinerarium_hold_yes',
-      c1: 'cinerarium',
-      c2: 'hold'
-    },
-    {
-      c0: 'cinerarium_sold_yes',
-      c1: 'cinerarium',
-      c2: 'sold'
-    },
-    {
-      c0: 'cinerarium_reserved_yes',
-      c1: 'cinerarium',
-      c2: 'reserved'
-    },
-    {
-      c0: 'cinerarium_available_yes',
-      c1: 'cinerarium',
-      c2: 'available'
-    },
-    {
-      c0: 'cinerarium_notyetavailable_yes',
-      c1: 'cinerarium',
-      c2: 'notyetavailable'
-    },
+    }
+  ]
+
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  toQuery.forEach(que => {
+    // query to firebase
+    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
+      if (snapshot.exists()) {
+        var numOfChildren = snapshot.numChildren();
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+
+        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
+        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
+        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
+      }
+      else {
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
+      }
+
+    });
+
+    console.log(que.c1 + '-' + que.c2 + ":ok")
+
+  })
+
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
+
+  res.status(200).send('ok:getDailyRunningTotal');
+
+});
+
+exports.getDailyRunningTotal_BoneChamber = functions.https.onRequest((req, res) => {
+  // identofy type_status_invetoriable to query
+  var toQuery = [
     //bonechamber
     {
       c0: 'bonechamber_hold_yes',
@@ -575,147 +617,111 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
       c0: 'bonechamber_reserved_yes',
       c1: 'bonechamber',
       c2: 'reserved'
-    },
+    }
+  ]
+
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  toQuery.forEach(que => {
+    // query to firebase
+    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
+      if (snapshot.exists()) {
+        var numOfChildren = snapshot.numChildren();
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+
+        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
+        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
+        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
+      }
+      else {
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
+      }
+
+    });
+
+    console.log(que.c1 + '-' + que.c2 + ":ok")
+
+  })
+
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
+
+  res.status(200).send('ok:getDailyRunningTotal');
+
+});
+
+exports.getDailyRunningTotal_Cinerarium = functions.https.onRequest((req, res) => {
+  // identofy type_status_invetoriable to query
+  var toQuery = [
+    //cinerarium
     {
-      c0: 'bonechamber_available_yes',
-      c1: 'bonechamber',
-      c2: 'available'
-    },
-    {
-      c0: 'bonechamber_notyetavailable_yes',
-      c1: 'bonechamber',
-      c2: 'notyetavailable'
-    },
-    //familylots1
-    {
-      c0: 'familylots1_hold_yes',
-      c1: 'familylots1',
+      c0: 'cinerarium_hold_yes',
+      c1: 'cinerarium',
       c2: 'hold'
     },
     {
-      c0: 'familylots1_sold_yes',
-      c1: 'familylots1',
+      c0: 'cinerarium_sold_yes',
+      c1: 'cinerarium',
       c2: 'sold'
     },
     {
-      c0: 'familylots1_reserved_yes',
-      c1: 'familylots1',
+      c0: 'cinerarium_reserved_yes',
+      c1: 'cinerarium',
       c2: 'reserved'
-    },
-    {
-      c0: 'familylots1_available_yes',
-      c1: 'familylots1',
-      c2: 'available'
-    },
-    {
-      c0: 'familylots1_notyetavailable_yes',
-      c1: 'familylots1',
-      c2: 'notyetavailable'
-    },
-    //familylots2
-    {
-      c0: 'familylots2_hold_yes',
-      c1: 'familylots2',
-      c2: 'hold'
-    },
-    {
-      c0: 'familylots2_sold_yes',
-      c1: 'familylots2',
-      c2: 'sold'
-    },
-    {
-      c0: 'familylots2_reserved_yes',
-      c1: 'familylots2',
-      c2: 'reserved'
-    },
-    {
-      c0: 'familylots2_available_yes',
-      c1: 'familylots2',
-      c2: 'available'
-    },
-    {
-      c0: 'familylots2_notyetavailable_yes',
-      c1: 'familylots2',
-      c2: 'notyetavailable'
-    },
-    //familylots3
-    {
-      c0: 'familylots3_hold_yes',
-      c1: 'familylots3',
-      c2: 'hold'
-    },
-    {
-      c0: 'familylots3_sold_yes',
-      c1: 'familylots3',
-      c2: 'sold'
-    },
-    {
-      c0: 'familylots3_reserved_yes',
-      c1: 'familylots3',
-      c2: 'reserved'
-    },
-    {
-      c0: 'familylots3_available_yes',
-      c1: 'familylots3',
-      c2: 'available'
-    },
-    {
-      c0: 'familylots3_notyetavailable_yes',
-      c1: 'familylots3',
-      c2: 'notyetavailable'
-    },
-    //familylots4
-    {
-      c0: 'familylots4_hold_yes',
-      c1: 'familylots4',
-      c2: 'hold'
-    },
-    {
-      c0: 'familylots4_sold_yes',
-      c1: 'familylots4',
-      c2: 'sold'
-    },
-    {
-      c0: 'familylots4_reserved_yes',
-      c1: 'familylots4',
-      c2: 'reserved'
-    },
-    {
-      c0: 'familylots4_available_yes',
-      c1: 'familylots4',
-      c2: 'available'
-    },
-    {
-      c0: 'familylots4_notyetavailable_yes',
-      c1: 'familylots4',
-      c2: 'notyetavailable'
-    },
-    //familylots5
-    {
-      c0: 'familylots5_hold_yes',
-      c1: 'familylots5',
-      c2: 'hold'
-    },
-    {
-      c0: 'familylots5_sold_yes',
-      c1: 'familylots5',
-      c2: 'sold'
-    },
-    {
-      c0: 'familylots5_reserved_yes',
-      c1: 'familylots5',
-      c2: 'reserved'
-    },
-    {
-      c0: 'familylots5_available_yes',
-      c1: 'familylots5',
-      c2: 'available'
-    },
-    {
-      c0: 'familylots5_notyetavailable_yes',
-      c1: 'familylots5',
-      c2: 'notyetavailable'
-    },
+    }
+  ]
+
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  toQuery.forEach(que => {
+    // query to firebase
+    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
+      if (snapshot.exists()) {
+        var numOfChildren = snapshot.numChildren();
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+
+        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
+        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
+        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
+      }
+      else {
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
+      }
+
+    });
+
+    console.log(que.c1 + '-' + que.c2 + ":ok")
+
+  })
+
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
+
+  res.status(200).send('ok:getDailyRunningTotal');
+
+});
+
+exports.getDailyRunningTotal_GardenLot = functions.https.onRequest((req, res) => {
+  // identofy type_status_invetoriable to query
+  var toQuery = [
     //gardenlots1
     {
       c0: 'gardenlots1_hold_yes',
@@ -732,16 +738,16 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
       c1: 'gardenlots1',
       c2: 'reserved'
     },
-    {
-      c0: 'gardenlots1_available_yes',
-      c1: 'gardenlots1',
-      c2: 'available'
-    },
-    {
-      c0: 'gardenlots1_notyetavailable_yes',
-      c1: 'gardenlots1',
-      c2: 'notyetavailable'
-    },
+    // {
+    //   c0: 'gardenlots1_available_yes',
+    //   c1: 'gardenlots1',
+    //   c2: 'available'
+    // },
+    // {
+    //   c0: 'gardenlots1_notyetavailable_yes',
+    //   c1: 'gardenlots1',
+    //   c2: 'notyetavailable'
+    // },
     //gardenlots2
     {
       c0: 'gardenlots2_hold_yes',
@@ -758,16 +764,16 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
       c1: 'gardenlots2',
       c2: 'reserved'
     },
-    {
-      c0: 'gardenlots2_available_yes',
-      c1: 'gardenlots2',
-      c2: 'available'
-    },
-    {
-      c0: 'gardenlots2_notyetavailable_yes',
-      c1: 'gardenlots2',
-      c2: 'notyetavailable'
-    },
+    // {
+    //   c0: 'gardenlots2_available_yes',
+    //   c1: 'gardenlots2',
+    //   c2: 'available'
+    // },
+    // {
+    //   c0: 'gardenlots2_notyetavailable_yes',
+    //   c1: 'gardenlots2',
+    //   c2: 'notyetavailable'
+    // },
     //gardenlots3
     {
       c0: 'gardenlots3_hold_yes',
@@ -784,16 +790,16 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
       c1: 'gardenlots3',
       c2: 'reserved'
     },
-    {
-      c0: 'gardenlots3_available_yes',
-      c1: 'gardenlots3',
-      c2: 'available'
-    },
-    {
-      c0: 'gardenlots3_notyetavailable_yes',
-      c1: 'gardenlots3',
-      c2: 'notyetavailable'
-    },
+    // {
+    //   c0: 'gardenlots3_available_yes',
+    //   c1: 'gardenlots3',
+    //   c2: 'available'
+    // },
+    // {
+    //   c0: 'gardenlots3_notyetavailable_yes',
+    //   c1: 'gardenlots3',
+    //   c2: 'notyetavailable'
+    // },
     //gardenlots4
     {
       c0: 'gardenlots4_hold_yes',
@@ -810,16 +816,16 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
       c1: 'gardenlots4',
       c2: 'reserved'
     },
-    {
-      c0: 'gardenlots4_available_yes',
-      c1: 'gardenlots4',
-      c2: 'available'
-    },
-    {
-      c0: 'gardenlots4_notyetavailable_yes',
-      c1: 'gardenlots4',
-      c2: 'notyetavailable'
-    },
+    // {
+    //   c0: 'gardenlots4_available_yes',
+    //   c1: 'gardenlots4',
+    //   c2: 'available'
+    // },
+    // {
+    //   c0: 'gardenlots4_notyetavailable_yes',
+    //   c1: 'gardenlots4',
+    //   c2: 'notyetavailable'
+    // },
     //gardenlots5
     {
       c0: 'gardenlots5_hold_yes',
@@ -835,16 +841,6 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
       c0: 'gardenlots5_reserved_yes',
       c1: 'gardenlots5',
       c2: 'reserved'
-    },
-    {
-      c0: 'gardenlots5_available_yes',
-      c1: 'gardenlots5',
-      c2: 'available'
-    },
-    {
-      c0: 'gardenlots5_notyetavailable_yes',
-      c1: 'gardenlots5',
-      c2: 'notyetavailable'
     }
   ]
 
@@ -857,8 +853,6 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
   var totalHold = 0;
   var totalReserved = 0;
   var totalSold = 0;
-  var totalAvailable = 0;
-  var totalNotYetAvailable = 0;
 
   toQuery.forEach(que => {
     // query to firebase
@@ -870,8 +864,6 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
         if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
         else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
         else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
-        else if (que.c2 == "available") totalAvailable = totalAvailable + numOfChildren;
-        else if (que.c2 == "notyetavailable") totalNotYetAvailable = totalNotYetAvailable + numOfChildren;
       }
       else {
         admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
@@ -879,24 +871,653 @@ exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
 
     });
 
+    console.log(que.c1 + '-' + que.c2 + ":ok")
+
   })
 
-  admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
-  admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
-  admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
-  admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalAvailable').transaction(qty => qty = totalAvailable).then(() => { });
-  admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalNotYetAvailable').transaction(qty => qty = totalNotYetAvailable).then(() => { });
-
-
-
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
 
   res.status(200).send('ok:getDailyRunningTotal');
 
 });
 
+exports.getDailyRunningTotal_FamilyLot = functions.https.onRequest((req, res) => {
+  // identofy type_status_invetoriable to query
+  var toQuery = [
+    //familylots1
+    {
+      c0: 'familylots1_hold_yes',
+      c1: 'familylots1',
+      c2: 'hold'
+    },
+    {
+      c0: 'familylots1_sold_yes',
+      c1: 'familylots1',
+      c2: 'sold'
+    },
+    {
+      c0: 'familylots1_reserved_yes',
+      c1: 'familylots1',
+      c2: 'reserved'
+    },
+    // {
+    //   c0: 'familylots1_available_yes',
+    //   c1: 'familylots1',
+    //   c2: 'available'
+    // },
+    // {
+    //   c0: 'familylots1_notyetavailable_yes',
+    //   c1: 'familylots1',
+    //   c2: 'notyetavailable'
+    // },
+    //familylots2
+    {
+      c0: 'familylots2_hold_yes',
+      c1: 'familylots2',
+      c2: 'hold'
+    },
+    {
+      c0: 'familylots2_sold_yes',
+      c1: 'familylots2',
+      c2: 'sold'
+    },
+    {
+      c0: 'familylots2_reserved_yes',
+      c1: 'familylots2',
+      c2: 'reserved'
+    },
+    // {
+    //   c0: 'familylots2_available_yes',
+    //   c1: 'familylots2',
+    //   c2: 'available'
+    // },
+    // {
+    //   c0: 'familylots2_notyetavailable_yes',
+    //   c1: 'familylots2',
+    //   c2: 'notyetavailable'
+    // },
+    //familylots3
+    {
+      c0: 'familylots3_hold_yes',
+      c1: 'familylots3',
+      c2: 'hold'
+    },
+    {
+      c0: 'familylots3_sold_yes',
+      c1: 'familylots3',
+      c2: 'sold'
+    },
+    {
+      c0: 'familylots3_reserved_yes',
+      c1: 'familylots3',
+      c2: 'reserved'
+    },
+    // {
+    //   c0: 'familylots3_available_yes',
+    //   c1: 'familylots3',
+    //   c2: 'available'
+    // },
+    // {
+    //   c0: 'familylots3_notyetavailable_yes',
+    //   c1: 'familylots3',
+    //   c2: 'notyetavailable'
+    // },
+    //familylots4
+    {
+      c0: 'familylots4_hold_yes',
+      c1: 'familylots4',
+      c2: 'hold'
+    },
+    {
+      c0: 'familylots4_sold_yes',
+      c1: 'familylots4',
+      c2: 'sold'
+    },
+    {
+      c0: 'familylots4_reserved_yes',
+      c1: 'familylots4',
+      c2: 'reserved'
+    },
+    // {
+    //   c0: 'familylots4_available_yes',
+    //   c1: 'familylots4',
+    //   c2: 'available'
+    // },
+    // {
+    //   c0: 'familylots4_notyetavailable_yes',
+    //   c1: 'familylots4',
+    //   c2: 'notyetavailable'
+    // },
+    //familylots5
+    {
+      c0: 'familylots5_hold_yes',
+      c1: 'familylots5',
+      c2: 'hold'
+    },
+    {
+      c0: 'familylots5_sold_yes',
+      c1: 'familylots5',
+      c2: 'sold'
+    },
+    {
+      c0: 'familylots5_reserved_yes',
+      c1: 'familylots5',
+      c2: 'reserved'
+    },
+    // {
+    //   c0: 'familylots5_available_yes',
+    //   c1: 'familylots5',
+    //   c2: 'available'
+    // },
+    // {
+    //   c0: 'familylots5_notyetavailable_yes',
+    //   c1: 'familylots5',
+    //   c2: 'notyetavailable'
+    // },
+  ]
+
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  toQuery.forEach(que => {
+    // query to firebase
+    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
+      if (snapshot.exists()) {
+        var numOfChildren = snapshot.numChildren();
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+
+        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
+        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
+        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
+      }
+      else {
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
+      }
+
+    });
+
+    console.log(que.c1 + '-' + que.c2 + ":ok")
+
+  })
+
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
+  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
+
+  res.status(200).send('ok:getDailyRunningTotal');
+
+});
+
+exports.getDailyRunningTotal_Totals = functions.https.onRequest((req, res) => {
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+
+  ref.child('/reports/overallTotalInventory/lotType').once('value').then(snapshot => {
+
+    if (snapshot.exists()) {
+
+      snapshot.forEach(element => {
+
+        var open = element.val().open;
+        var notyetavailable = element.val().notyetavailable;
+
+        ref.child('/reports/overAll/' + serverDatePH_String + '/lotType/' + element.key).once('value').then(snap => {
+
+          if (snap.exists()) {
+            var hold = 0;
+            var reserved = 0;
+            var sold = 0;
+
+            if (snap.val().hold) hold = snap.val().hold;
+            if (snap.val().reserved) reserved = snap.val().reserved;
+            if (snap.val().sold) sold = snap.val().sold;
+
+            var available = open - (hold + reserved + sold);
+
+            admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + element.key + '/available').transaction(qty => qty = available).then(() => { });
+            admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + element.key + '/notyetavailable').transaction(qty => qty = notyetavailable).then(() => { });
+
+            //overall total hold, reserved, sold
+            admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = qty + hold).then(() => { });
+            admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = qty + reserved).then(() => { });
+            admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = qty + sold).then(() => { });
+
+            //overall total available and not yet available
+            admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalAvailable').transaction(qty => qty = qty + available).then(() => { });
+            admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalNotyetavailable').transaction(qty => qty = qty + notyetavailable).then(() => { });
+          }
+        });
+      });
+    }
+  });
+  res.status(200).send('ok');
+});
+
+
+// exports.getDailyRunningTotal = functions.https.onRequest((req, res) => {
+//   // identofy type_status_invetoriable to query
+//   var toQuery = [
+//     //lawnlots
+//     {
+//       c0: 'lawnlots_hold_yes',
+//       c1: 'lawnlots',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'lawnlots_sold_yes',
+//       c1: 'lawnlots',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'lawnlots_reserved_yes',
+//       c1: 'lawnlots',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'lawnlots_available_yes',
+//     //   c1: 'lawnlots',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'lawnlots_notyetavailable_yes',
+//     //   c1: 'lawnlots',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //wallniche
+//     {
+//       c0: 'wallniche_hold_yes',
+//       c1: 'wallniche',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'wallniche_sold_yes',
+//       c1: 'wallniche',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'wallniche_reserved_yes',
+//       c1: 'wallniche',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'wallniche_available_yes',
+//     //   c1: 'wallniche',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'wallniche_notyetavailable_yes',
+//     //   c1: 'wallniche',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //cinerarium
+//     {
+//       c0: 'cinerarium_hold_yes',
+//       c1: 'cinerarium',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'cinerarium_sold_yes',
+//       c1: 'cinerarium',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'cinerarium_reserved_yes',
+//       c1: 'cinerarium',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'cinerarium_available_yes',
+//     //   c1: 'cinerarium',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'cinerarium_notyetavailable_yes',
+//     //   c1: 'cinerarium',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //bonechamber
+//     {
+//       c0: 'bonechamber_hold_yes',
+//       c1: 'bonechamber',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'bonechamber_sold_yes',
+//       c1: 'bonechamber',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'bonechamber_reserved_yes',
+//       c1: 'bonechamber',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'bonechamber_available_yes',
+//     //   c1: 'bonechamber',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'bonechamber_notyetavailable_yes',
+//     //   c1: 'bonechamber',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //familylots1
+//     {
+//       c0: 'familylots1_hold_yes',
+//       c1: 'familylots1',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'familylots1_sold_yes',
+//       c1: 'familylots1',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'familylots1_reserved_yes',
+//       c1: 'familylots1',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'familylots1_available_yes',
+//     //   c1: 'familylots1',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'familylots1_notyetavailable_yes',
+//     //   c1: 'familylots1',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //familylots2
+//     {
+//       c0: 'familylots2_hold_yes',
+//       c1: 'familylots2',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'familylots2_sold_yes',
+//       c1: 'familylots2',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'familylots2_reserved_yes',
+//       c1: 'familylots2',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'familylots2_available_yes',
+//     //   c1: 'familylots2',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'familylots2_notyetavailable_yes',
+//     //   c1: 'familylots2',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //familylots3
+//     {
+//       c0: 'familylots3_hold_yes',
+//       c1: 'familylots3',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'familylots3_sold_yes',
+//       c1: 'familylots3',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'familylots3_reserved_yes',
+//       c1: 'familylots3',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'familylots3_available_yes',
+//     //   c1: 'familylots3',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'familylots3_notyetavailable_yes',
+//     //   c1: 'familylots3',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //familylots4
+//     {
+//       c0: 'familylots4_hold_yes',
+//       c1: 'familylots4',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'familylots4_sold_yes',
+//       c1: 'familylots4',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'familylots4_reserved_yes',
+//       c1: 'familylots4',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'familylots4_available_yes',
+//     //   c1: 'familylots4',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'familylots4_notyetavailable_yes',
+//     //   c1: 'familylots4',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //familylots5
+//     {
+//       c0: 'familylots5_hold_yes',
+//       c1: 'familylots5',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'familylots5_sold_yes',
+//       c1: 'familylots5',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'familylots5_reserved_yes',
+//       c1: 'familylots5',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'familylots5_available_yes',
+//     //   c1: 'familylots5',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'familylots5_notyetavailable_yes',
+//     //   c1: 'familylots5',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //gardenlots1
+//     {
+//       c0: 'gardenlots1_hold_yes',
+//       c1: 'gardenlots1',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'gardenlots1_sold_yes',
+//       c1: 'gardenlots1',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'gardenlots1_reserved_yes',
+//       c1: 'gardenlots1',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'gardenlots1_available_yes',
+//     //   c1: 'gardenlots1',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'gardenlots1_notyetavailable_yes',
+//     //   c1: 'gardenlots1',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //gardenlots2
+//     {
+//       c0: 'gardenlots2_hold_yes',
+//       c1: 'gardenlots2',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'gardenlots2_sold_yes',
+//       c1: 'gardenlots2',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'gardenlots2_reserved_yes',
+//       c1: 'gardenlots2',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'gardenlots2_available_yes',
+//     //   c1: 'gardenlots2',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'gardenlots2_notyetavailable_yes',
+//     //   c1: 'gardenlots2',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //gardenlots3
+//     {
+//       c0: 'gardenlots3_hold_yes',
+//       c1: 'gardenlots3',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'gardenlots3_sold_yes',
+//       c1: 'gardenlots3',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'gardenlots3_reserved_yes',
+//       c1: 'gardenlots3',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'gardenlots3_available_yes',
+//     //   c1: 'gardenlots3',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'gardenlots3_notyetavailable_yes',
+//     //   c1: 'gardenlots3',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //gardenlots4
+//     {
+//       c0: 'gardenlots4_hold_yes',
+//       c1: 'gardenlots4',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'gardenlots4_sold_yes',
+//       c1: 'gardenlots4',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'gardenlots4_reserved_yes',
+//       c1: 'gardenlots4',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'gardenlots4_available_yes',
+//     //   c1: 'gardenlots4',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'gardenlots4_notyetavailable_yes',
+//     //   c1: 'gardenlots4',
+//     //   c2: 'notyetavailable'
+//     // },
+//     //gardenlots5
+//     {
+//       c0: 'gardenlots5_hold_yes',
+//       c1: 'gardenlots5',
+//       c2: 'hold'
+//     },
+//     {
+//       c0: 'gardenlots5_sold_yes',
+//       c1: 'gardenlots5',
+//       c2: 'sold'
+//     },
+//     {
+//       c0: 'gardenlots5_reserved_yes',
+//       c1: 'gardenlots5',
+//       c2: 'reserved'
+//     },
+//     // {
+//     //   c0: 'gardenlots5_available_yes',
+//     //   c1: 'gardenlots5',
+//     //   c2: 'available'
+//     // },
+//     // {
+//     //   c0: 'gardenlots5_notyetavailable_yes',
+//     //   c1: 'gardenlots5',
+//     //   c2: 'notyetavailable'
+//     // }
+//   ]
+
+
+//   var serverDateTime = new Date();
+//   var serverDateTimePH = new Date(serverDateTime);
+//   serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+//   serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+//   var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+//   var totalHold = 0;
+//   var totalReserved = 0;
+//   var totalSold = 0;
+
+//   toQuery.forEach(que => {
+//     // query to firebase
+//     ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
+//       if (snapshot.exists()) {
+//         var numOfChildren = snapshot.numChildren();
+//         admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+
+//         if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
+//         else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
+//         else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
+//       }
+//       else {
+//         admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
+//       }
+
+//     });
+
+//     console.log(que.c1 + '-' +  que.c2 + ":ok")
+
+//   })
+
+//   // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
+//   // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
+//   // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
+
+//   res.status(200).send('ok:getDailyRunningTotal');
+
+// });
+
 
 exports.dataCatchupLotTypeStatusInventoriable = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo(null).limitToFirst(500).once('value').then(snapshot => {
+  ref.child('lots').orderByChild('type_status_inventoriable').equalTo(null).limitToFirst(250).once('value').then(snapshot => {
 
     if (snapshot.exists()) {
 
