@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "cors": "^2.8.4",
+    "firebase-functions": "^0.8.1",
     "node-cors": "^1.0.0"
   }
 }
