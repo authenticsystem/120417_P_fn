@@ -7,388 +7,12 @@ admin.initializeApp(functions.config().firebase);
 
 const ref = admin.database().ref();
 
-exports.fiveminuteReset = functions.https.onRequest((req, res) => {
-  // var serverDateTime = new Date(admin.database.ServerValue.TIMESTAMP);
-  var d1 = new Date();
-  var xdate = new Date(d1);
-  var sdate = new Date(d1);
-  xdate.setHours(d1.getHours() - 168); //less 24hours
-  sdate.setHours(d1.getHours() + 8); //manila +8 offset from UTC
+//****************** SHB 2018.08.25 6pm */ <
 
-  var computedStartDateTimeNow = xdate.getFullYear() + "-" + ("0" + (xdate.getMonth() + 1)).slice(-2) + "-" + ("0" + xdate.getDate()).slice(-2)
-    + "T" + ("0" + (xdate.getHours())).slice(-2) + ":" + ("0" + xdate.getMinutes()).slice(-2);
-
-  var computedDateTimeNow = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
-    + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
-
-  var computedDateToday = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2);
-
-  ref.child('lots').orderByChild('reservationdetails/expiry').startAt(computedStartDateTimeNow).endAt(computedDateTimeNow).once('value').then(snapshot => {
-
-    if (snapshot.exists()) {
-
-      getStatusColors().then(statusColors => {
-
-        if (statusColors) {
-
-          snapshot.forEach(element => {
-
-            if (element.val().reservationdetails.expiry) {
-
-              getNextReservation(element.key, element.val().reservation, element.val().reservationdetails.expiry).then(tokens => {
-
-                var map_lot = 'block' + element.val().block + 'lot' + element.val().lot;
-                getMapLotStatus(map_lot, element.val().level).then(mapLotStatus => {
-
-                  var updatePathsAtOnce = {};
-                  if (tokens) {
-                    var keys = Object.keys(tokens);
-                    var previousDate;
-                    var key = '';
-
-                    keys.forEach(ckey => {
-                      //contain next
-                      //check if next reservation is also expired
-                      var kxdate = new Date(tokens[ckey].expiry);
-                      if (tokens[ckey].expiry) {
-                        if (kxdate > sdate) {
-                          if (previousDate) {
-                            if (kxdate < previousDate) {
-                              //if current expiry date is greater than previous evaluated expiry
-                              key = ckey;
-                            }
-                          }
-                          else {
-                            key = ckey;
-                          }
-
-                          previousDate = kxdate;
-                        }
-                      }
-                    });
-
-                    if (key) {
-                      updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/iscurrent'] = false;
-                      updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/isexpired'] = true;
-                      updatePathsAtOnce['/reservations/' + element.key + '/' + key + '/iscurrent'] = true;
-                      updatePathsAtOnce['/reservations/' + element.key + '/' + key + '/isexpired'] = false;
-                      tokens[key].iscurrent = true;
-                      tokens[key].isxpired = false;
-                      updatePathsAtOnce['/lots/' + element.key + '/reservation'] = key.toString();
-                      updatePathsAtOnce['/lots/' + element.key + '/reservationdetails'] = tokens[key];
-                      updatePathsAtOnce['/lots/' + element.key + '/status'] = tokens[key].type;
-                      updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/bg_color'] = statusColors[tokens[key].type].bg_color;
-                      updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/fore_color'] = statusColors[tokens[key].type].fore_color;
-                      updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/status_name'] = statusColors[tokens[key].type].name;
-                      updatePathsAtOnce['/lots/' + element.key + '/type_status_inventoriable'] = element.val().type + '_' + tokens[key].type + '_' + element.val().inventoriable;
-
-                      var xarea = '';
-                      if(element.val().area) xarea = element.val().area;
-
-                      var xpart = '';
-                      if(element.val().part) xpart = element.val().part;
-
-                      updatePathsAtOnce['/reports/fiveminuteReset/' + computedDateToday + element.val().reservation] = {
-                        lotkey: element.key,
-                        area: xarea,
-                        block: element.val().block,
-                        designation: element.val().designation,
-                        inventoriable: element.val().inventoriable,
-                        level: element.val().level,
-                        lot: element.val().lot,
-                        part: xpart,
-                        reservation: element.val().reservation,
-                        reservationdetails: element.val().reservationdetails,
-                        status: element.val().status,
-                        type: element.val().type
-                      };
-
-                      //if have map_lot then update map_lot
-                      if (mapLotStatus) {
-                        updatePathsAtOnce['/lots/' + map_lot + '/status'] = mapLotStatus;
-                        updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/bg_color'] = statusColors[mapLotStatus].bg_color;
-                        updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/fore_color'] = statusColors[mapLotStatus].fore_color;
-                        updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/status_name'] = statusColors[mapLotStatus].name;
-                        updatePathsAtOnce['/lots/' + map_lot + '/type_status_inventoriable'] = element.val().type + '_' + mapLotStatus + '_' + 'no';
-                      }
-                    }
-
-                  }
-                  else {
-                    //no next
-                    updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/iscurrent'] = false;
-                    updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/isexpired'] = true;
-                    updatePathsAtOnce['/lots/' + element.key + '/reservation'] = '';
-                    updatePathsAtOnce['/lots/' + element.key + '/reservationdetails'] = '';
-                    updatePathsAtOnce['/lots/' + element.key + '/status'] = 'available';
-                    updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/bg_color'] = statusColors['available'].bg_color;
-                    updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/fore_color'] = statusColors['available'].fore_color;
-                    updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/status_name'] = statusColors['available'].name;
-                    updatePathsAtOnce['/lots/' + element.key + '/type_status_inventoriable'] = element.val().type + '_' + 'available' + '_' + element.val().inventoriable;
-
-                    var xarea = '';
-                    if(element.val().area) xarea = element.val().area;
-
-                    var xpart = '';
-                    if(element.val().part) xpart = element.val().part;
-
-                    updatePathsAtOnce['/reports/fiveminuteReset/' + computedDateToday + element.val().reservation] = {
-                      lotkey: element.key,
-                      area: xarea,
-                      block: element.val().block,
-                      designation: element.val().designation,
-                      inventoriable: element.val().inventoriable,
-                      level: element.val().level,
-                      lot: element.val().lot,
-                      part: xpart,
-                      reservation: element.val().reservation,
-                      reservationdetails: element.val().reservationdetails,
-                      status: element.val().status,
-                      type: element.val().type
-                    };
-
-                    //if have map_lot then update map_lot
-                    if (mapLotStatus) {
-                      updatePathsAtOnce['/lots/' + map_lot + '/status'] = mapLotStatus;
-                      updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/bg_color'] = statusColors[mapLotStatus].bg_color;
-                      updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/fore_color'] = statusColors[mapLotStatus].fore_color;
-                      updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/status_name'] = statusColors[mapLotStatus].name;
-                      updatePathsAtOnce['/lots/' + map_lot + '/type_status_inventoriable'] = element.val().type + '_' + mapLotStatus + '_' + 'no';
-                    }
-
-                  }
-
-                  ref.update(updatePathsAtOnce).then(function () {
-                    console.log(element.key + ": Write completed")
-                  }).catch(function (error) {
-                    console.log(element.key + ':' + error)
-                  });
-
-                });
-
-              });
-
-            }
-
-          });
-
-          res.status(200).send('ok:' + snapshot.numChildren());
-
-        }
-        else {
-          res.status(505).send('status colors not defined');
-        }
-
-      }).catch(reason => {
-        res.status(505).send('fiveminuteReset error: ' + reason);
-      });
-    }
-    else {
-      res.status(200).send('snapshot null');
-    }
-    // res.status(200).send('total is ' + snapshot.numChildren());
-  }).catch(reason => {
-    res.status(505).send('fiveminuteReset error: ' + reason);
-  });
-});
-
-
-exports.fiveminuteReset20180202 = functions.https.onRequest((req, res) => {
-  // var serverDateTime = new Date(admin.database.ServerValue.TIMESTAMP);
-  var d1 = new Date();
-  d1.setFullYear(2018);
-  d1.setMonth(1);
-  d1.setDate(2);
-  
-  var xdate = new Date(d1);
-  var sdate = new Date(d1);
-  xdate.setHours(d1.getHours() - 168); //less 24hours
-  sdate.setHours(d1.getHours() + 8); //manila +8 offset from UTC
-
-  var computedStartDateTimeNow = xdate.getFullYear() + "-" + ("0" + (xdate.getMonth() + 1)).slice(-2) + "-" + ("0" + xdate.getDate()).slice(-2)
-    + "T" + ("0" + (xdate.getHours())).slice(-2) + ":" + ("0" + xdate.getMinutes()).slice(-2);
-
-  var computedDateTimeNow = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
-    + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
-
-  var computedDateToday = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2);
-
-  ref.child('lots').orderByChild('reservationdetails/expiry').startAt(computedStartDateTimeNow).endAt(computedDateTimeNow).once('value').then(snapshot => {
-
-    if (snapshot.exists()) {
-
-      getStatusColors().then(statusColors => {
-
-        if (statusColors) {
-
-          snapshot.forEach(element => {
-
-            if (element.val().reservationdetails.expiry) {
-
-              getNextReservation(element.key, element.val().reservation, element.val().reservationdetails.expiry).then(tokens => {
-
-                var map_lot = 'block' + element.val().block + 'lot' + element.val().lot;
-                getMapLotStatus(map_lot, element.val().level).then(mapLotStatus => {
-
-                  var updatePathsAtOnce = {};
-                  if (tokens) {
-                    var keys = Object.keys(tokens);
-                    var previousDate;
-                    var key = '';
-
-                    keys.forEach(ckey => {
-                      //contain next
-                      //check if next reservation is also expired
-                      var kxdate = new Date(tokens[ckey].expiry);
-                      if (tokens[ckey].expiry) {
-                        if (kxdate > sdate) {
-                          if (previousDate) {
-                            if (kxdate < previousDate) {
-                              //if current expiry date is greater than previous evaluated expiry
-                              key = ckey;
-                            }
-                          }
-                          else {
-                            key = ckey;
-                          }
-
-                          previousDate = kxdate;
-                        }
-                      }
-                    });
-
-                    if (key) {
-                      updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/iscurrent'] = false;
-                      updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/isexpired'] = true;
-                      updatePathsAtOnce['/reservations/' + element.key + '/' + key + '/iscurrent'] = true;
-                      updatePathsAtOnce['/reservations/' + element.key + '/' + key + '/isexpired'] = false;
-                      tokens[key].iscurrent = true;
-                      tokens[key].isxpired = false;
-                      updatePathsAtOnce['/lots/' + element.key + '/reservation'] = key.toString();
-                      updatePathsAtOnce['/lots/' + element.key + '/reservationdetails'] = tokens[key];
-                      updatePathsAtOnce['/lots/' + element.key + '/status'] = tokens[key].type;
-                      updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/bg_color'] = statusColors[tokens[key].type].bg_color;
-                      updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/fore_color'] = statusColors[tokens[key].type].fore_color;
-                      updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/status_name'] = statusColors[tokens[key].type].name;
-                      updatePathsAtOnce['/lots/' + element.key + '/type_status_inventoriable'] = element.val().type + '_' + tokens[key].type + '_' + element.val().inventoriable;
-
-                      var xarea = '';
-                      if(element.val().area) xarea = element.val().area;
-
-                      var xpart = '';
-                      if(element.val().part) xpart = element.val().part;
-
-                      updatePathsAtOnce['/reports/fiveminuteReset/' + computedDateToday + element.val().reservation] = {
-                        lotkey: element.key,
-                        area: xarea,
-                        block: element.val().block,
-                        designation: element.val().designation,
-                        inventoriable: element.val().inventoriable,
-                        level: element.val().level,
-                        lot: element.val().lot,
-                        part: xpart,
-                        reservation: element.val().reservation,
-                        reservationdetails: element.val().reservationdetails,
-                        status: element.val().status,
-                        type: element.val().type
-                      };
-
-                      //if have map_lot then update map_lot
-                      if (mapLotStatus) {
-                        updatePathsAtOnce['/lots/' + map_lot + '/status'] = mapLotStatus;
-                        updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/bg_color'] = statusColors[mapLotStatus].bg_color;
-                        updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/fore_color'] = statusColors[mapLotStatus].fore_color;
-                        updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/status_name'] = statusColors[mapLotStatus].name;
-                        updatePathsAtOnce['/lots/' + map_lot + '/type_status_inventoriable'] = element.val().type + '_' + mapLotStatus + '_' + 'no';
-                      }
-                    }
-
-                  }
-                  else {
-                    //no next
-                    updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/iscurrent'] = false;
-                    updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/isexpired'] = true;
-                    updatePathsAtOnce['/lots/' + element.key + '/reservation'] = '';
-                    updatePathsAtOnce['/lots/' + element.key + '/reservationdetails'] = '';
-                    updatePathsAtOnce['/lots/' + element.key + '/status'] = 'available';
-                    updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/bg_color'] = statusColors['available'].bg_color;
-                    updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/fore_color'] = statusColors['available'].fore_color;
-                    updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/status_name'] = statusColors['available'].name;
-                    updatePathsAtOnce['/lots/' + element.key + '/type_status_inventoriable'] = element.val().type + '_' + 'available' + '_' + element.val().inventoriable;
-
-                    var xarea = '';
-                    if(element.val().area) xarea = element.val().area;
-
-                    var xpart = '';
-                    if(element.val().part) xpart = element.val().part;
-
-                    updatePathsAtOnce['/reports/fiveminuteReset/' + computedDateToday + element.val().reservation] = {
-                      lotkey: element.key,
-                      area: xarea,
-                      block: element.val().block,
-                      designation: element.val().designation,
-                      inventoriable: element.val().inventoriable,
-                      level: element.val().level,
-                      lot: element.val().lot,
-                      part: xpart,
-                      reservation: element.val().reservation,
-                      reservationdetails: element.val().reservationdetails,
-                      status: element.val().status,
-                      type: element.val().type
-                    };
-
-                    //if have map_lot then update map_lot
-                    if (mapLotStatus) {
-                      updatePathsAtOnce['/lots/' + map_lot + '/status'] = mapLotStatus;
-                      updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/bg_color'] = statusColors[mapLotStatus].bg_color;
-                      updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/fore_color'] = statusColors[mapLotStatus].fore_color;
-                      updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/status_name'] = statusColors[mapLotStatus].name;
-                      updatePathsAtOnce['/lots/' + map_lot + '/type_status_inventoriable'] = element.val().type + '_' + mapLotStatus + '_' + 'no';
-                    }
-
-                  }
-
-                  ref.update(updatePathsAtOnce).then(function () {
-                    console.log(element.key + ": Write completed")
-                  }).catch(function (error) {
-                    console.log(element.key + ':' + error)
-                  });
-
-                });
-
-              });
-
-            }
-
-          });
-
-          res.status(200).send('ok:' + snapshot.numChildren());
-
-        }
-        else {
-          res.status(505).send('status colors not defined');
-        }
-
-      }).catch(reason => {
-        res.status(505).send('fiveminuteReset error: ' + reason);
-      });
-    }
-    else {
-      res.status(200).send('snapshot null');
-    }
-    // res.status(200).send('total is ' + snapshot.numChildren());
-  }).catch(reason => {
-    res.status(505).send('fiveminuteReset error: ' + reason);
-  });
-});
-
-
-exports.reservationReports = functions.database.ref('/lots/{uid}').onWrite(event => {
+//on /lots write
+exports.F00_reservationReports = functions.database.ref('/lots/{uid}').onWrite(event => {
   //get previous and new data
   //get server time +8
-  //get ActivityReport current value
-  //compare previous date if today, if not today no update to be set, if today: update the ActivityReport Current value
-  //compare current date if today, if not today no update to be set, if today: update the ActivityReport Current value
 
   const previousData = event.data.previous.val();
   const newData = event.data.val();
@@ -418,29 +42,16 @@ exports.reservationReports = functions.database.ref('/lots/{uid}').onWrite(event
           admin.database().ref('/reports/activity/daily/' + previousDataStart_noTimeString + '/lotType/' + previousData.type + '/' + previousDataStatus).transaction(qty => qty = qty - 1).then(() => { });
           admin.database().ref('/reports/activity/daily/' + previousDataStart_noTimeString + '/total' + jsUcfirst(previousDataStatus)).transaction(qty => qty = qty - 1).then(() => { });
 
-          //weekly
-          admin.database().ref('/reports/activity/weekly/' + previousDataStart_Week + '/lotType/' + previousData.type + '/' + previousDataStatus).transaction(qty => qty = qty - 1).then(() => { });
-          admin.database().ref('/reports/activity/weekly/' + previousDataStart_Week + '/total' + jsUcfirst(previousDataStatus)).transaction(qty => qty = qty - 1).then(() => { });
+          admin.database().ref('/reports/forUpdate20180825').push({
+            date: previousDataStart_noTimeString,
+            blocklot: event.params.uid,
+            lottype: previousData.type,
+            lotstatus: previousDataStatus,
+            agentkey: previousData.reservationdetails.agent,
+            agentdetails: previousData.reservationdetails.agentdetails,
+            addorless: "less"
+          });
 
-          //monthly
-          admin.database().ref('/reports/activity/monthly/' + previousDataStart_Month + '/lotType/' + previousData.type + '/' + previousDataStatus).transaction(qty => qty = qty - 1).then(() => { });
-          admin.database().ref('/reports/activity/monthly/' + previousDataStart_Month + '/total' + jsUcfirst(previousDataStatus)).transaction(qty => qty = qty - 1).then(() => { });
-
-          //yearly
-          admin.database().ref('/reports/activity/yearly/' + previousDataStart_Year + '/lotType/' + previousData.type + '/' + previousDataStatus).transaction(qty => qty = qty - 1).then(() => { });
-          admin.database().ref('/reports/activity/yearly/' + previousDataStart_Year + '/total' + jsUcfirst(previousDataStatus)).transaction(qty => qty = qty - 1).then(() => { });
-
-          //comparative
-          admin.database().ref('/reports/comparative/' + previousData.type + '/daily/' + previousDataStart_noTimeString + '/total' + jsUcfirst(previousDataStatus)).transaction(qty => qty = qty - 1).then(() => { });
-          admin.database().ref('/reports/comparative/' + previousData.type + '/weekly/' + previousDataStart_Week + '/total' + jsUcfirst(previousDataStatus)).transaction(qty => qty = qty - 1).then(() => { });
-          admin.database().ref('/reports/comparative/' + previousData.type + '/monthly/' + previousDataStart_Month + '/total' + jsUcfirst(previousDataStatus)).transaction(qty => qty = qty - 1).then(() => { });
-          admin.database().ref('/reports/comparative/' + previousData.type + '/yearly/' + previousDataStart_Year + '/total' + jsUcfirst(previousDataStatus)).transaction(qty => qty = qty - 1).then(() => { });
-
-          //For Update
-          if (serverDatePH.getTime() !== previousDataStart_noTimeDate.getTime()) {
-            admin.database().ref('/reports/forUpdate/' + previousDataStart_noTimeString + '/lotType/' + previousData.type + '/' + previousDataStatus).transaction(qty => qty = qty - 1).then(() => { });
-            admin.database().ref('/reports/forUpdate/' + previousDataStart_noTimeString + '/total' + jsUcfirst(previousDataStatus)).transaction(qty => qty = qty - 1).then(() => { });
-          }
 
           if (serverDatePH.getTime() === previousDataStart_noTimeDate.getTime()) {
             admin.database().ref('/reports/lotstatus/Today/' + previousData.type + '/' + previousDataStatus).transaction(qty => qty = qty - 1).then(() => { });
@@ -473,29 +84,15 @@ exports.reservationReports = functions.database.ref('/lots/{uid}').onWrite(event
           admin.database().ref('/reports/activity/daily/' + newDataStart_noTimeString + '/lotType/' + newData.type + '/' + newDataStatus).transaction(qty => qty = qty + 1).then(() => { });
           admin.database().ref('/reports/activity/daily/' + newDataStart_noTimeString + '/total' + jsUcfirst(newDataStatus)).transaction(qty => qty = qty + 1).then(() => { });
 
-          //weekly
-          admin.database().ref('/reports/activity/weekly/' + newDataStart_Week + '/lotType/' + newData.type + '/' + newDataStatus).transaction(qty => qty = qty + 1).then(() => { });
-          admin.database().ref('/reports/activity/weekly/' + newDataStart_Week + '/total' + jsUcfirst(newDataStatus)).transaction(qty => qty = qty + 1).then(() => { });
-
-          //monthly
-          admin.database().ref('/reports/activity/monthly/' + newDataStart_Month + '/lotType/' + newData.type + '/' + newDataStatus).transaction(qty => qty = qty + 1).then(() => { });
-          admin.database().ref('/reports/activity/monthly/' + newDataStart_Month + '/total' + jsUcfirst(newDataStatus)).transaction(qty => qty = qty + 1).then(() => { });
-
-          //yearly
-          admin.database().ref('/reports/activity/yearly/' + newDataStart_Year + '/lotType/' + newData.type + '/' + newDataStatus).transaction(qty => qty = qty + 1).then(() => { });
-          admin.database().ref('/reports/activity/yearly/' + newDataStart_Year + '/total' + jsUcfirst(newDataStatus)).transaction(qty => qty = qty + 1).then(() => { });
-
-          //comparative
-          admin.database().ref('/reports/comparative/' + newData.type + '/daily/' + newDataStart_noTimeString + '/total' + jsUcfirst(newDataStatus)).transaction(qty => qty = qty + 1).then(() => { });
-          admin.database().ref('/reports/comparative/' + newData.type + '/weekly/' + newDataStart_Week + '/total' + jsUcfirst(newDataStatus)).transaction(qty => qty = qty + 1).then(() => { });
-          admin.database().ref('/reports/comparative/' + newData.type + '/monthly/' + newDataStart_Month + '/total' + jsUcfirst(newDataStatus)).transaction(qty => qty = qty + 1).then(() => { });
-          admin.database().ref('/reports/comparative/' + newData.type + '/yearly/' + newDataStart_Year + '/total' + jsUcfirst(newDataStatus)).transaction(qty => qty = qty + 1).then(() => { });
-
-          //for Update
-          if (serverDatePH.getTime() !== newDataStart_noTimeDate.getTime()) {
-            admin.database().ref('/reports/forUpdate/' + newDataStart_noTimeString + '/lotType/' + newData.type + '/' + newDataStatus).transaction(qty => qty = qty + 1).then(() => { });
-            admin.database().ref('/reports/forUpdate/' + newDataStart_noTimeString + '/total' + jsUcfirst(newDataStatus)).transaction(qty => qty = qty + 1).then(() => { });
-          }
+          admin.database().ref('/reports/forUpdate20180825').push({
+            date: newDataStart_noTimeString,
+            blocklot: event.params.uid,
+            lottype: newData.type,
+            lotstatus: newDataStatus,
+            agentkey: newData.reservationdetails.agent,
+            agentdetails: newData.reservationdetails.agentdetails,
+            addorless: "add"
+          });
 
           if (serverDatePH.getTime() === newDataStart_noTimeDate.getTime()) {
             admin.database().ref('/reports/lotstatus/Today/' + newData.type + '/' + newDataStatus).transaction(qty => qty = qty + 1).then(() => { });
@@ -512,122 +109,437 @@ exports.reservationReports = functions.database.ref('/lots/{uid}').onWrite(event
 
 });
 
-exports.forUpdateToOverall = functions.https.onRequest((req, res) => {
+//schedule everyday from 8am to 12pm, every 5 minutes
+exports.F01_updateReservationReports = functions.https.onRequest((req, res) => {
+  //activity, comparative, & agent reports
+  //weekly
+  //monthly
+  //yearly
+
+  ref.child('reports/forUpdate20180825').limitToFirst(1).once('value').then(snapshot => {
+
+    if (snapshot.exists()) {
+      snapshot.forEach(element => {
+        ref.child('agents/' + element.val().agentkey).once('value').then(_agent => {
+          if (_agent.val()) {
+            var _date = new Date(element.val().date);
+            var _date_noTimeString = _date.getFullYear() + "-" + ("0" + (_date.getMonth() + 1)).slice(-2) + "-" + ("0" + _date.getDate()).slice(-2);
+            var _date_noTimeDate = new Date(_date_noTimeString);
+            var _date_Week = getWeekNumber(_date);
+            var _date_Month = _date.getFullYear() + "-" + ("0" + (_date.getMonth() + 1)).slice(-2);
+            var _date_Year = _date.getFullYear();
+
+              var serverDateTime = new Date();
+              var serverDateTimePH = new Date(serverDateTime);
+              serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+              var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2) + "T00:00";
+              var serverDatePH = new Date(serverDatePH_String);
+
+            if (element.val().addorless == "add") {
+              //weekly
+              admin.database().ref('/reports/activity/weekly/' + _date_Week + '/lotType/' + element.val().lottype + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/activity/weekly/' + _date_Week + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty + 1).then(() => { });
+
+              //monthly
+              admin.database().ref('/reports/activity/monthly/' + _date_Month + '/lotType/' + element.val().lottype + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/activity/monthly/' + _date_Month + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty + 1).then(() => { });
+
+              //yearly
+              admin.database().ref('/reports/activity/yearly/' + _date_Year + '/lotType/' + element.val().lottype + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/activity/yearly/' + _date_Year + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty + 1).then(() => { });
+
+              //comparative
+              admin.database().ref('/reports/comparative/' + element.val().lottype + '/daily/' + _date_noTimeString + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/comparative/' + element.val().lottype + '/weekly/' + _date_Week + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/comparative/' + element.val().lottype + '/monthly/' + _date_Month + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/comparative/' + element.val().lottype + '/yearly/' + _date_Year + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty + 1).then(() => { });
+
+              //sales_agents
+              admin.database().ref('/reports/sales_agents/daily/' + _date_noTimeString + '/agents/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().agentkey + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/daily/' + _date_noTimeString + '/groups/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/daily/' + _date_noTimeString + '/type/' + _agent.val().type + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+
+              admin.database().ref('/reports/sales_agents/weekly/' + _date_Week + '/agents/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().agentkey + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/weekly/' + _date_Week + '/groups/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/weekly/' + _date_Week + '/type/' + _agent.val().type + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+
+              admin.database().ref('/reports/sales_agents/monthly/' + _date_Month + '/agents/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().agentkey + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/monthly/' + _date_Month + '/groups/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/monthly/' + _date_Month + '/type/' + _agent.val().type + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+
+              admin.database().ref('/reports/sales_agents/yearly/' + _date_Year + '/agents/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().agentkey + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/yearly/' + _date_Year + '/groups/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/yearly/' + _date_Year + '/type/' + _agent.val().type + '/' + element.val().lotstatus).transaction(qty => qty = qty + 1).then(() => { });
+
+              //update overall?
+              if (serverDatePH.getTime() !== _date_noTimeDate.getTime()) {
+                admin.database().ref('/reports/overAll/' + _date_noTimeString + '/lotType/' + _agent.val().type + '/' + element.val().lotstatus).transaction(val => val = Number(val) + 1).then(() => { });
+                admin.database().ref('/reports/overAll/' + _date_noTimeString + '/overall/total' + jsUcfirst(element.val().lotstatus)).transaction(val => val = Number(val) + 1).then(() => { });
+              }              
+
+              //update to null
+              admin.database().ref('/reports/forUpdate20180825/' + element.key).set(null);
+
+              admin.database().ref('/reports/forUpdate20180825Logs/' + _date_noTimeString + '/' + element.key).set(element.val());
+
+            }
+            else if (element.val().addorless == "less") {
+              //weekly
+              admin.database().ref('/reports/activity/weekly/' + _date_Week + '/lotType/' + element.val().lottype + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/activity/weekly/' + _date_Week + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty - 1).then(() => { });
+
+              //monthly
+              admin.database().ref('/reports/activity/monthly/' + _date_Month + '/lotType/' + element.val().lottype + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/activity/monthly/' + _date_Month + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty - 1).then(() => { });
+
+              //yearly
+              admin.database().ref('/reports/activity/yearly/' + _date_Year + '/lotType/' + element.val().lottype + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/activity/yearly/' + _date_Year + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty - 1).then(() => { });
+
+              //comparative
+              admin.database().ref('/reports/comparative/' + element.val().lottype + '/daily/' + _date_noTimeString + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/comparative/' + element.val().lottype + '/weekly/' + _date_Week + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/comparative/' + element.val().lottype + '/monthly/' + _date_Month + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/comparative/' + element.val().lottype + '/yearly/' + _date_Year + '/total' + jsUcfirst(element.val().lotstatus)).transaction(qty => qty = qty - 1).then(() => { });
+
+              //sales_agents
+              admin.database().ref('/reports/sales_agents/daily/' + _date_noTimeString + '/agents/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().agentkey + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/daily/' + _date_noTimeString + '/groups/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/daily/' + _date_noTimeString + '/type/' + _agent.val().type + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+
+              admin.database().ref('/reports/sales_agents/weekly/' + _date_Week + '/agents/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().agentkey + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/weekly/' + _date_Week + '/groups/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/weekly/' + _date_Week + '/type/' + _agent.val().type + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+
+              admin.database().ref('/reports/sales_agents/monthly/' + _date_Month + '/agents/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().agentkey + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/monthly/' + _date_Month + '/groups/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/monthly/' + _date_Month + '/type/' + _agent.val().type + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+
+              admin.database().ref('/reports/sales_agents/yearly/' + _date_Year + '/agents/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().agentkey + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/yearly/' + _date_Year + '/groups/' + _agent.val().type + '/' + _agent.val().group + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+              admin.database().ref('/reports/sales_agents/yearly/' + _date_Year + '/type/' + _agent.val().type + '/' + element.val().lotstatus).transaction(qty => qty = qty - 1).then(() => { });
+
+              //update overall?
+              if (serverDatePH.getTime() !== _date_noTimeDate.getTime()) {
+                admin.database().ref('/reports/overAll/' + _date_noTimeString + '/lotType/' + _agent.val().type + '/' + element.val().lotstatus).transaction(val => val = Number(val) - 1).then(() => { });
+                admin.database().ref('/reports/overAll/' + _date_noTimeString + '/overall/total' + jsUcfirst(element.val().lotstatus)).transaction(val => val = Number(val) - 1).then(() => { });
+              } 
+
+              //update to null
+              admin.database().ref('/reports/forUpdate20180825/' + element.key).set(null);
+
+              admin.database().ref('/reports/forUpdate20180825Logs/' + _date_noTimeString + '/' + element.key).set(element.val());
+            }
+            else {
+              console.log("updateReservationReports:error:" + element.val().blocklot)
+            }
+
+          }
+          else {
+            console.log("updateReservationReports:error:agent does not exist:" + element.val().blocklot + ":" + element.val().agentkey)
+          }
+
+
+        });
+
+      });
+
+      res.status(200).send('updateReservationReports:ok');
+
+    }
+    else {
+      res.status(200).send('updateReservationReports:empty');
+    }
+
+  }).catch(reason => {
+    res.status(500).send('updateReservationReports error: ' + reason);
+  });
+
+  //** FOR TESTING 2018.08.26 1AM */
+});
+
+//schedule everyday, 12am and 12pm
+exports.F02_fiveminuteReset = functions.https.onRequest((req, res) => {
+  // var serverDateTime = new Date(admin.database.ServerValue.TIMESTAMP);
+  var d1 = new Date();
+  var xdate = new Date(d1);
+  var sdate = new Date(d1);
+  xdate.setHours(d1.getHours() - 168); //less 24hours
+  sdate.setHours(d1.getHours() + 8); //manila +8 offset from UTC
+
+  var computedStartDateTimeNow = xdate.getFullYear() + "-" + ("0" + (xdate.getMonth() + 1)).slice(-2) + "-" + ("0" + xdate.getDate()).slice(-2)
+    + "T" + ("0" + (xdate.getHours())).slice(-2) + ":" + ("0" + xdate.getMinutes()).slice(-2);
+
+  var computedDateTimeNow = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
+    + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
+
+  var computedDateToday = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2);
+
+  ref.child('lots').orderByChild('reservationdetails/expiry').startAt(computedStartDateTimeNow).endAt(computedDateTimeNow).once('value').then(snapshot => {
+
+    if (snapshot.exists()) {
+
+      getStatusColors().then(statusColors => {
+
+        if (statusColors) {
+
+          snapshot.forEach(element => {
+
+            if (element.val().reservationdetails.expiry) {
+
+              getNextReservation(element.key, element.val().reservation, element.val().reservationdetails.expiry).then(tokens => {
+
+                var map_lot = 'block' + element.val().block + 'lot' + element.val().lot;
+                getMapLotStatus(map_lot, element.val().level).then(mapLotStatus => {
+
+                  var updatePathsAtOnce = {};
+                  if (tokens) {
+                    var keys = Object.keys(tokens);
+                    var previousDate;
+                    var key = '';
+
+                    keys.forEach(ckey => {
+                      //contain next
+                      //check if next reservation is also expired
+                      var kxdate = new Date(tokens[ckey].expiry);
+                      if (tokens[ckey].expiry) {
+                        if (kxdate > sdate) {
+                          if (previousDate) {
+                            if (kxdate < previousDate) {
+                              //if current expiry date is greater than previous evaluated expiry
+                              key = ckey;
+                            }
+                          }
+                          else {
+                            key = ckey;
+                          }
+
+                          previousDate = kxdate;
+                        }
+                      }
+                    });
+
+                    if (key) {
+                      updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/iscurrent'] = false;
+                      updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/isexpired'] = true;
+                      updatePathsAtOnce['/reservations/' + element.key + '/' + key + '/iscurrent'] = true;
+                      updatePathsAtOnce['/reservations/' + element.key + '/' + key + '/isexpired'] = false;
+                      tokens[key].iscurrent = true;
+                      tokens[key].isxpired = false;
+                      updatePathsAtOnce['/lots/' + element.key + '/reservation'] = key.toString();
+                      updatePathsAtOnce['/lots/' + element.key + '/reservationdetails'] = tokens[key];
+                      updatePathsAtOnce['/lots/' + element.key + '/status'] = tokens[key].type;
+                      updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/bg_color'] = statusColors[tokens[key].type].bg_color;
+                      updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/fore_color'] = statusColors[tokens[key].type].fore_color;
+                      updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/status_name'] = statusColors[tokens[key].type].name;
+                      updatePathsAtOnce['/lots/' + element.key + '/type_status_inventoriable'] = element.val().type + '_' + tokens[key].type + '_' + element.val().inventoriable;
+
+                      var xarea = '';
+                      if (element.val().area) xarea = element.val().area;
+
+                      var xpart = '';
+                      if (element.val().part) xpart = element.val().part;
+
+                      updatePathsAtOnce['/reports/fiveminuteReset/' + computedDateToday + element.val().reservation] = {
+                        lotkey: element.key,
+                        area: xarea,
+                        block: element.val().block,
+                        designation: element.val().designation,
+                        inventoriable: element.val().inventoriable,
+                        level: element.val().level,
+                        lot: element.val().lot,
+                        part: xpart,
+                        reservation: element.val().reservation,
+                        reservationdetails: element.val().reservationdetails,
+                        status: element.val().status,
+                        type: element.val().type
+                      };
+
+                      //if have map_lot then update map_lot
+                      if (mapLotStatus) {
+                        updatePathsAtOnce['/lots/' + map_lot + '/status'] = mapLotStatus;
+                        updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/bg_color'] = statusColors[mapLotStatus].bg_color;
+                        updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/fore_color'] = statusColors[mapLotStatus].fore_color;
+                        updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/status_name'] = statusColors[mapLotStatus].name;
+                        updatePathsAtOnce['/lots/' + map_lot + '/type_status_inventoriable'] = element.val().type + '_' + mapLotStatus + '_' + 'no';
+                      }
+                    }
+
+                  }
+                  else {
+                    //no next
+                    updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/iscurrent'] = false;
+                    updatePathsAtOnce['/reservations/' + element.key + '/' + element.val().reservation + '/isexpired'] = true;
+                    updatePathsAtOnce['/lots/' + element.key + '/reservation'] = '';
+                    updatePathsAtOnce['/lots/' + element.key + '/reservationdetails'] = '';
+                    updatePathsAtOnce['/lots/' + element.key + '/status'] = 'available';
+                    updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/bg_color'] = statusColors['available'].bg_color;
+                    updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/fore_color'] = statusColors['available'].fore_color;
+                    updatePathsAtOnce['/lots/' + element.key + '/maprenderdetails/status_name'] = statusColors['available'].name;
+                    updatePathsAtOnce['/lots/' + element.key + '/type_status_inventoriable'] = element.val().type + '_' + 'available' + '_' + element.val().inventoriable;
+
+                    var xarea = '';
+                    if (element.val().area) xarea = element.val().area;
+
+                    var xpart = '';
+                    if (element.val().part) xpart = element.val().part;
+
+                    updatePathsAtOnce['/reports/fiveminuteReset/' + computedDateToday + element.val().reservation] = {
+                      lotkey: element.key,
+                      area: xarea,
+                      block: element.val().block,
+                      designation: element.val().designation,
+                      inventoriable: element.val().inventoriable,
+                      level: element.val().level,
+                      lot: element.val().lot,
+                      part: xpart,
+                      reservation: element.val().reservation,
+                      reservationdetails: element.val().reservationdetails,
+                      status: element.val().status,
+                      type: element.val().type
+                    };
+
+                    //if have map_lot then update map_lot
+                    if (mapLotStatus) {
+                      updatePathsAtOnce['/lots/' + map_lot + '/status'] = mapLotStatus;
+                      updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/bg_color'] = statusColors[mapLotStatus].bg_color;
+                      updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/fore_color'] = statusColors[mapLotStatus].fore_color;
+                      updatePathsAtOnce['/lots/' + map_lot + '/maprenderdetails/status_name'] = statusColors[mapLotStatus].name;
+                      updatePathsAtOnce['/lots/' + map_lot + '/type_status_inventoriable'] = element.val().type + '_' + mapLotStatus + '_' + 'no';
+                    }
+
+                  }
+
+                  ref.update(updatePathsAtOnce).then(function () {
+                    console.log(element.key + ": Write completed")
+                  }).catch(function (error) {
+                    console.log(element.key + ':' + error)
+                  });
+
+                });
+
+              });
+
+            }
+
+          });
+
+          res.status(200).send('ok:' + snapshot.numChildren());
+
+        }
+        else {
+          res.status(505).send('status colors not defined');
+        }
+
+      }).catch(reason => {
+        res.status(505).send('fiveminuteReset error: ' + reason);
+      });
+    }
+    else {
+      res.status(200).send('snapshot null');
+    }
+    // res.status(200).send('total is ' + snapshot.numChildren());
+  }).catch(reason => {
+    res.status(505).send('fiveminuteReset error: ' + reason);
+  });
+});
+
+//schedule everyday, 1:00am
+exports.F10_getDailyRunningTotal_LawnLots_20180825 = functions.https.onRequest((req, res) => {
 
   var serverDateTime = new Date();
   var serverDateTimePH = new Date(serverDateTime);
   serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
   var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
 
-  ref.child('reports/forUpdate').once('value').then(snapshot => {
+  ref.child('reports/comparative/lawnlots/yearly').once('value').then(snapshot => {
 
-    if (snapshot.exists()) {
+    if (snapshot.val()) {
+
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/lawnlots/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/lawnlots/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/lawnlots/sold').transaction(qty => qty = 0).then(() => { });
 
       snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
 
-        var previousKey = '';
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
 
-        //given: date, lottype, total, status
-        ref.child('reports/overAll').orderByKey().startAt(element.key).once('value').then(snap => {
-          if (snap.exists()) {
-            snap.forEach(elem => {
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/lawnlots/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/lawnlots/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/lawnlots/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
 
-              console.log(elem.val());
-
-              var hold = 0;
-              var reserved = 0;
-              var sold = 0;
-
-              if (element.val().totalHold) hold = Number(element.val().totalHold);
-              if (element.val().totalReserved) reserved = Number(element.val().totalReserved);
-              if (element.val().totalSold) sold = Number(element.val().totalSold);
-
-              admin.database().ref('/reports/overAll/' + elem.key + '/overall/totalHold').transaction(val => val = Number(val) + hold).then(() => { });
-              admin.database().ref('/reports/overAll/' + elem.key + '/overall/totalReserved').transaction(val => val = Number(val) + reserved).then(() => { });
-              admin.database().ref('/reports/overAll/' + elem.key + '/overall/totalSold').transaction(val => val = Number(val) + sold).then(() => { });
-              admin.database().ref('/reports/overAll/' + elem.key + '/overall/totalAvailable').transaction(val => val = Number(val) - hold - reserved - sold).then(() => { });
-
-              //save to forUpdateLogs
-              if (previousKey != element.key) {
-                admin.database().ref('/reports/forUpdateLogs/' + serverDatePH_String + '/' + elem.key + '/totalHold').transaction(val => val = hold).then(() => { });
-                admin.database().ref('/reports/forUpdateLogs/' + serverDatePH_String + '/' + elem.key + '/totalReserved').transaction(val => val = reserved).then(() => { });
-                admin.database().ref('/reports/forUpdateLogs/' + serverDatePH_String + '/' + elem.key + '/totalSold').transaction(val => val = sold).then(() => { });
-              }
-
-              element.forEach(zz => {
-                if (zz.key == 'lotType') {
-                  zz.forEach(xx => {
-                    // console.log(zz.val());
-                    var totalHold = 0;
-                    var totalReserved = 0;
-                    var totalSold = 0;
-
-                    if (xx.val().hold) totalHold = Number(xx.val().hold);
-                    if (xx.val().reserved) totalReserved = Number(xx.val().reserved);
-                    if (xx.val().sold) totalSold = Number(xx.val().sold);
-
-                    admin.database().ref('/reports/overAll/' + elem.key + '/lotType/' + xx.key + '/hold').transaction(val => val = Number(val) + totalHold).then(() => { });
-                    admin.database().ref('/reports/overAll/' + elem.key + '/lotType/' + xx.key + '/reserved').transaction(val => val = Number(val) + totalReserved).then(() => { });
-                    admin.database().ref('/reports/overAll/' + elem.key + '/lotType/' + xx.key + '/sold').transaction(val => val = Number(val) + totalSold).then(() => { });
-                    admin.database().ref('/reports/overAll/' + elem.key + '/lotType/' + xx.key + '/available').transaction(val => val = Number(val) - totalHold - totalReserved - totalSold).then(() => { });
-
-                    if (previousKey != element.key) {
-                      //save to forUpdateLogs
-                      admin.database().ref('/reports/forUpdateLogs/' + serverDatePH_String + '/' + elem.key + '/lotType/' + xx.key + '/hold').transaction(val => val = totalHold).then(() => { });
-                      admin.database().ref('/reports/forUpdateLogs/' + serverDatePH_String + '/' + elem.key + '/lotType/' + xx.key + '/reserved').transaction(val => val = totalReserved).then(() => { });
-                      admin.database().ref('/reports/forUpdateLogs/' + serverDatePH_String + '/' + elem.key + '/lotType/' + xx.key + '/sold').transaction(val => val = totalSold).then(() => { });
-                    }
-
-                  });
-
-                }
-
-              });
-
-
-              previousKey = element.key;
-
-            });
-          }
-
-        });
-
-
-
+        console.log(element.val());
       });
 
     }
 
-    res.status(200).send('ok.forUpdateToOverall:' + snapshot.numChildren());
+    console.log("getDailyRunningTotal_LawnLots20180825:ok")
 
-  });
+  })
 
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
 
 });
 
+//schedule everyday, 1:30am
+exports.F11_getDailyRunningTotal_WallNiche_20180825 = functions.https.onRequest((req, res) => {
 
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
 
-exports.getDailyRunningTotal_LawnLots = functions.https.onRequest((req, res) => {
-  // identofy type_status_invetoriable to query
-  var toQuery = [
-    //lawnlots
-    {
-      c0: 'lawnlots_hold_yes',
-      c1: 'lawnlots',
-      c2: 'hold'
-    },
-    {
-      c0: 'lawnlots_sold_yes',
-      c1: 'lawnlots',
-      c2: 'sold'
-    },
-    {
-      c0: 'lawnlots_reserved_yes',
-      c1: 'lawnlots',
-      c2: 'reserved'
+  ref.child('reports/comparative/wallniche/yearly').once('value').then(snapshot => {
+
+    if (snapshot.val()) {
+
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/wallniche/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/wallniche/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/wallniche/sold').transaction(qty => qty = 0).then(() => { });
+
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
+
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
+
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/wallniche/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/wallniche/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/wallniche/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
+
+        console.log(element.val());
+      });
+
     }
-  ]
 
+    console.log("getDailyRunningTotal_wallniche20180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 2:00am
+exports.F12_getDailyRunningTotal_BoneChamber_20180825 = functions.https.onRequest((req, res) => {
 
   var serverDateTime = new Date();
   var serverDateTimePH = new Date(serverDateTime);
@@ -638,56 +550,43 @@ exports.getDailyRunningTotal_LawnLots = functions.https.onRequest((req, res) => 
   var totalReserved = 0;
   var totalSold = 0;
 
-  toQuery.forEach(que => {
-    // query to firebase
-    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
-      if (snapshot.exists()) {
-        var numOfChildren = snapshot.numChildren();
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+  ref.child('reports/comparative/bonechamber/yearly').once('value').then(snapshot => {
 
-        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
-        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
-        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
-      }
-      else {
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
-      }
+    if (snapshot.val()) {
 
-    });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/bonechamber/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/bonechamber/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/bonechamber/sold').transaction(qty => qty = 0).then(() => { });
 
-    console.log(que.c1 + '-' + que.c2 + ":ok")
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
 
-  })
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
 
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/bonechamber/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/bonechamber/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/bonechamber/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
 
-  res.status(200).send('ok:getDailyRunningTotal');
+        console.log(element.val());
+      });
 
-});
-
-exports.getDailyRunningTotal_WallNiche = functions.https.onRequest((req, res) => {
-  // identofy type_status_invetoriable to query
-  var toQuery = [
-    //wallniche
-    {
-      c0: 'wallniche_hold_yes',
-      c1: 'wallniche',
-      c2: 'hold'
-    },
-    {
-      c0: 'wallniche_sold_yes',
-      c1: 'wallniche',
-      c2: 'sold'
-    },
-    {
-      c0: 'wallniche_reserved_yes',
-      c1: 'wallniche',
-      c2: 'reserved'
     }
-  ]
 
+    console.log("getDailyRunningTotal_bonechamber20180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 2:30am
+exports.F13_getDailyRunningTotal_Cinerarium_20180825 = functions.https.onRequest((req, res) => {
 
   var serverDateTime = new Date();
   var serverDateTimePH = new Date(serverDateTime);
@@ -698,56 +597,43 @@ exports.getDailyRunningTotal_WallNiche = functions.https.onRequest((req, res) =>
   var totalReserved = 0;
   var totalSold = 0;
 
-  toQuery.forEach(que => {
-    // query to firebase
-    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
-      if (snapshot.exists()) {
-        var numOfChildren = snapshot.numChildren();
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+  ref.child('reports/comparative/cinerarium/yearly').once('value').then(snapshot => {
 
-        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
-        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
-        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
-      }
-      else {
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
-      }
+    if (snapshot.val()) {
 
-    });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/cinerarium/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/cinerarium/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/cinerarium/sold').transaction(qty => qty = 0).then(() => { });
 
-    console.log(que.c1 + '-' + que.c2 + ":ok")
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
 
-  })
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
 
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/cinerarium/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/cinerarium/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/cinerarium/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
 
-  res.status(200).send('ok:getDailyRunningTotal');
+        console.log(element.val());
+      });
 
-});
-
-exports.getDailyRunningTotal_BoneChamber = functions.https.onRequest((req, res) => {
-  // identofy type_status_invetoriable to query
-  var toQuery = [
-    //bonechamber
-    {
-      c0: 'bonechamber_hold_yes',
-      c1: 'bonechamber',
-      c2: 'hold'
-    },
-    {
-      c0: 'bonechamber_sold_yes',
-      c1: 'bonechamber',
-      c2: 'sold'
-    },
-    {
-      c0: 'bonechamber_reserved_yes',
-      c1: 'bonechamber',
-      c2: 'reserved'
     }
-  ]
 
+    console.log("getDailyRunningTotal_Cinerarium20180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 3:00am
+exports.F14_getDailyRunningTotal_GardenLot1_20180825 = functions.https.onRequest((req, res) => {
 
   var serverDateTime = new Date();
   var serverDateTimePH = new Date(serverDateTime);
@@ -758,56 +644,43 @@ exports.getDailyRunningTotal_BoneChamber = functions.https.onRequest((req, res) 
   var totalReserved = 0;
   var totalSold = 0;
 
-  toQuery.forEach(que => {
-    // query to firebase
-    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
-      if (snapshot.exists()) {
-        var numOfChildren = snapshot.numChildren();
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+  ref.child('reports/comparative/gardenlots1/yearly').once('value').then(snapshot => {
 
-        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
-        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
-        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
-      }
-      else {
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
-      }
+    if (snapshot.val()) {
 
-    });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots1/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots1/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots1/sold').transaction(qty => qty = 0).then(() => { });
 
-    console.log(que.c1 + '-' + que.c2 + ":ok")
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
 
-  })
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
 
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots1/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots1/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots1/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
 
-  res.status(200).send('ok:getDailyRunningTotal');
+        console.log(element.val());
+      });
 
-});
-
-exports.getDailyRunningTotal_Cinerarium = functions.https.onRequest((req, res) => {
-  // identofy type_status_invetoriable to query
-  var toQuery = [
-    //cinerarium
-    {
-      c0: 'cinerarium_hold_yes',
-      c1: 'cinerarium',
-      c2: 'hold'
-    },
-    {
-      c0: 'cinerarium_sold_yes',
-      c1: 'cinerarium',
-      c2: 'sold'
-    },
-    {
-      c0: 'cinerarium_reserved_yes',
-      c1: 'cinerarium',
-      c2: 'reserved'
     }
-  ]
 
+    console.log("getDailyRunningTotal_GardenLot120180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 3:12am
+exports.F15_getDailyRunningTotal_GardenLot2_20180825 = functions.https.onRequest((req, res) => {
 
   var serverDateTime = new Date();
   var serverDateTimePH = new Date(serverDateTime);
@@ -818,160 +691,43 @@ exports.getDailyRunningTotal_Cinerarium = functions.https.onRequest((req, res) =
   var totalReserved = 0;
   var totalSold = 0;
 
-  toQuery.forEach(que => {
-    // query to firebase
-    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
-      if (snapshot.exists()) {
-        var numOfChildren = snapshot.numChildren();
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+  ref.child('reports/comparative/gardenlots2/yearly').once('value').then(snapshot => {
 
-        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
-        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
-        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
-      }
-      else {
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
-      }
+    if (snapshot.val()) {
 
-    });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots2/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots2/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots2/sold').transaction(qty => qty = 0).then(() => { });
 
-    console.log(que.c1 + '-' + que.c2 + ":ok")
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
 
-  })
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
 
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots2/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots2/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots2/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
 
-  res.status(200).send('ok:getDailyRunningTotal');
+        console.log(element.val());
+      });
 
-});
-
-exports.getDailyRunningTotal_GardenLot = functions.https.onRequest((req, res) => {
-  // identofy type_status_invetoriable to query
-  var toQuery = [
-    //gardenlots1
-    {
-      c0: 'gardenlots1_hold_yes',
-      c1: 'gardenlots1',
-      c2: 'hold'
-    },
-    {
-      c0: 'gardenlots1_sold_yes',
-      c1: 'gardenlots1',
-      c2: 'sold'
-    },
-    {
-      c0: 'gardenlots1_reserved_yes',
-      c1: 'gardenlots1',
-      c2: 'reserved'
-    },
-    // {
-    //   c0: 'gardenlots1_available_yes',
-    //   c1: 'gardenlots1',
-    //   c2: 'available'
-    // },
-    // {
-    //   c0: 'gardenlots1_notyetavailable_yes',
-    //   c1: 'gardenlots1',
-    //   c2: 'notyetavailable'
-    // },
-    //gardenlots2
-    {
-      c0: 'gardenlots2_hold_yes',
-      c1: 'gardenlots2',
-      c2: 'hold'
-    },
-    {
-      c0: 'gardenlots2_sold_yes',
-      c1: 'gardenlots2',
-      c2: 'sold'
-    },
-    {
-      c0: 'gardenlots2_reserved_yes',
-      c1: 'gardenlots2',
-      c2: 'reserved'
-    },
-    // {
-    //   c0: 'gardenlots2_available_yes',
-    //   c1: 'gardenlots2',
-    //   c2: 'available'
-    // },
-    // {
-    //   c0: 'gardenlots2_notyetavailable_yes',
-    //   c1: 'gardenlots2',
-    //   c2: 'notyetavailable'
-    // },
-    //gardenlots3
-    {
-      c0: 'gardenlots3_hold_yes',
-      c1: 'gardenlots3',
-      c2: 'hold'
-    },
-    {
-      c0: 'gardenlots3_sold_yes',
-      c1: 'gardenlots3',
-      c2: 'sold'
-    },
-    {
-      c0: 'gardenlots3_reserved_yes',
-      c1: 'gardenlots3',
-      c2: 'reserved'
-    },
-    // {
-    //   c0: 'gardenlots3_available_yes',
-    //   c1: 'gardenlots3',
-    //   c2: 'available'
-    // },
-    // {
-    //   c0: 'gardenlots3_notyetavailable_yes',
-    //   c1: 'gardenlots3',
-    //   c2: 'notyetavailable'
-    // },
-    //gardenlots4
-    {
-      c0: 'gardenlots4_hold_yes',
-      c1: 'gardenlots4',
-      c2: 'hold'
-    },
-    {
-      c0: 'gardenlots4_sold_yes',
-      c1: 'gardenlots4',
-      c2: 'sold'
-    },
-    {
-      c0: 'gardenlots4_reserved_yes',
-      c1: 'gardenlots4',
-      c2: 'reserved'
-    },
-    // {
-    //   c0: 'gardenlots4_available_yes',
-    //   c1: 'gardenlots4',
-    //   c2: 'available'
-    // },
-    // {
-    //   c0: 'gardenlots4_notyetavailable_yes',
-    //   c1: 'gardenlots4',
-    //   c2: 'notyetavailable'
-    // },
-    //gardenlots5
-    {
-      c0: 'gardenlots5_hold_yes',
-      c1: 'gardenlots5',
-      c2: 'hold'
-    },
-    {
-      c0: 'gardenlots5_sold_yes',
-      c1: 'gardenlots5',
-      c2: 'sold'
-    },
-    {
-      c0: 'gardenlots5_reserved_yes',
-      c1: 'gardenlots5',
-      c2: 'reserved'
     }
-  ]
 
+    console.log("getDailyRunningTotal_GardenLot220180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 3:24am
+exports.F16_getDailyRunningTotal_GardenLot3_20180825 = functions.https.onRequest((req, res) => {
 
   var serverDateTime = new Date();
   var serverDateTimePH = new Date(serverDateTime);
@@ -982,170 +738,43 @@ exports.getDailyRunningTotal_GardenLot = functions.https.onRequest((req, res) =>
   var totalReserved = 0;
   var totalSold = 0;
 
-  toQuery.forEach(que => {
-    // query to firebase
-    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
-      if (snapshot.exists()) {
-        var numOfChildren = snapshot.numChildren();
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+  ref.child('reports/comparative/gardenlots3/yearly').once('value').then(snapshot => {
 
-        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
-        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
-        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
-      }
-      else {
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
-      }
+    if (snapshot.val()) {
 
-    });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots3/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots3/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots3/sold').transaction(qty => qty = 0).then(() => { });
 
-    console.log(que.c1 + '-' + que.c2 + ":ok")
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
+
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
+
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots3/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots3/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots3/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
+
+        console.log(element.val());
+      });
+
+    }
+
+    console.log("getDailyRunningTotal_GardenLot320180825:ok")
 
   })
 
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
 
-  res.status(200).send('ok:getDailyRunningTotal');
+  res.status(200).send('ok:getDailyRunningTotal20180825');
 
 });
 
-exports.getDailyRunningTotal_FamilyLot = functions.https.onRequest((req, res) => {
-  // identofy type_status_invetoriable to query
-  var toQuery = [
-    //familylots1
-    {
-      c0: 'familylots1_hold_yes',
-      c1: 'familylots1',
-      c2: 'hold'
-    },
-    {
-      c0: 'familylots1_sold_yes',
-      c1: 'familylots1',
-      c2: 'sold'
-    },
-    {
-      c0: 'familylots1_reserved_yes',
-      c1: 'familylots1',
-      c2: 'reserved'
-    },
-    // {
-    //   c0: 'familylots1_available_yes',
-    //   c1: 'familylots1',
-    //   c2: 'available'
-    // },
-    // {
-    //   c0: 'familylots1_notyetavailable_yes',
-    //   c1: 'familylots1',
-    //   c2: 'notyetavailable'
-    // },
-    //familylots2
-    {
-      c0: 'familylots2_hold_yes',
-      c1: 'familylots2',
-      c2: 'hold'
-    },
-    {
-      c0: 'familylots2_sold_yes',
-      c1: 'familylots2',
-      c2: 'sold'
-    },
-    {
-      c0: 'familylots2_reserved_yes',
-      c1: 'familylots2',
-      c2: 'reserved'
-    },
-    // {
-    //   c0: 'familylots2_available_yes',
-    //   c1: 'familylots2',
-    //   c2: 'available'
-    // },
-    // {
-    //   c0: 'familylots2_notyetavailable_yes',
-    //   c1: 'familylots2',
-    //   c2: 'notyetavailable'
-    // },
-    //familylots3
-    {
-      c0: 'familylots3_hold_yes',
-      c1: 'familylots3',
-      c2: 'hold'
-    },
-    {
-      c0: 'familylots3_sold_yes',
-      c1: 'familylots3',
-      c2: 'sold'
-    },
-    {
-      c0: 'familylots3_reserved_yes',
-      c1: 'familylots3',
-      c2: 'reserved'
-    },
-    // {
-    //   c0: 'familylots3_available_yes',
-    //   c1: 'familylots3',
-    //   c2: 'available'
-    // },
-    // {
-    //   c0: 'familylots3_notyetavailable_yes',
-    //   c1: 'familylots3',
-    //   c2: 'notyetavailable'
-    // },
-    //familylots4
-    {
-      c0: 'familylots4_hold_yes',
-      c1: 'familylots4',
-      c2: 'hold'
-    },
-    {
-      c0: 'familylots4_sold_yes',
-      c1: 'familylots4',
-      c2: 'sold'
-    },
-    {
-      c0: 'familylots4_reserved_yes',
-      c1: 'familylots4',
-      c2: 'reserved'
-    },
-    // {
-    //   c0: 'familylots4_available_yes',
-    //   c1: 'familylots4',
-    //   c2: 'available'
-    // },
-    // {
-    //   c0: 'familylots4_notyetavailable_yes',
-    //   c1: 'familylots4',
-    //   c2: 'notyetavailable'
-    // },
-    //familylots5
-    {
-      c0: 'familylots5_hold_yes',
-      c1: 'familylots5',
-      c2: 'hold'
-    },
-    {
-      c0: 'familylots5_sold_yes',
-      c1: 'familylots5',
-      c2: 'sold'
-    },
-    {
-      c0: 'familylots5_reserved_yes',
-      c1: 'familylots5',
-      c2: 'reserved'
-    },
-    // {
-    //   c0: 'familylots5_available_yes',
-    //   c1: 'familylots5',
-    //   c2: 'available'
-    // },
-    // {
-    //   c0: 'familylots5_notyetavailable_yes',
-    //   c1: 'familylots5',
-    //   c2: 'notyetavailable'
-    // },
-  ]
-
+//schedule everyday, 3:36am
+exports.F17_getDailyRunningTotal_GardenLot4_20180825 = functions.https.onRequest((req, res) => {
 
   var serverDateTime = new Date();
   var serverDateTimePH = new Date(serverDateTime);
@@ -1156,36 +785,325 @@ exports.getDailyRunningTotal_FamilyLot = functions.https.onRequest((req, res) =>
   var totalReserved = 0;
   var totalSold = 0;
 
-  toQuery.forEach(que => {
-    // query to firebase
-    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
-      if (snapshot.exists()) {
-        var numOfChildren = snapshot.numChildren();
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = numOfChildren).then(() => { });
+  ref.child('reports/comparative/gardenlots4/yearly').once('value').then(snapshot => {
 
-        if (que.c2 == "hold") totalHold = totalHold + numOfChildren;
-        else if (que.c2 == "reserved") totalReserved = totalReserved + numOfChildren;
-        else if (que.c2 == "sold") totalSold = totalSold + numOfChildren;
-      }
-      else {
-        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = 0).then(() => { });
-      }
+    if (snapshot.val()) {
 
-    });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots4/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots4/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots4/sold').transaction(qty => qty = 0).then(() => { });
 
-    console.log(que.c1 + '-' + que.c2 + ":ok")
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
+
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
+
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots4/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots4/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots4/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
+
+        console.log(element.val());
+      });
+
+    }
+
+    console.log("getDailyRunningTotal_GardenLot420180825:ok")
 
   })
 
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalHold').transaction(qty => qty = totalHold).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalReserved').transaction(qty => qty = totalReserved).then(() => { });
-  // admin.database().ref('/reports/overAll/' + serverDatePH_String + '/overall/totalSold').transaction(qty => qty = totalSold).then(() => { });
 
-  res.status(200).send('ok:getDailyRunningTotal');
+  res.status(200).send('ok:getDailyRunningTotal20180825');
 
 });
 
-exports.getDailyRunningTotal_Totals = functions.https.onRequest((req, res) => {
+//schedule everyday, 3:48am
+exports.F18_getDailyRunningTotal_GardenLot5_20180825 = functions.https.onRequest((req, res) => {
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  ref.child('reports/comparative/gardenlots5/yearly').once('value').then(snapshot => {
+
+    if (snapshot.val()) {
+
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots5/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots5/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots5/sold').transaction(qty => qty = 0).then(() => { });
+
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
+
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
+
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots5/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots5/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/gardenlots5/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
+
+        console.log(element.val());
+      });
+
+    }
+
+    console.log("getDailyRunningTotal_GardenLot520180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 4:00am
+exports.F19_getDailyRunningTotal_FamilyLot1_20180825 = functions.https.onRequest((req, res) => {
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  ref.child('reports/comparative/familylots1/yearly').once('value').then(snapshot => {
+
+    if (snapshot.val()) {
+
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots1/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots1/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots1/sold').transaction(qty => qty = 0).then(() => { });
+
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
+
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
+
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots1/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots1/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots1/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
+
+        console.log(element.val());
+      });
+
+    }
+
+    console.log("getDailyRunningTotal_FamilyLot120180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 4:12am
+exports.F20_getDailyRunningTotal_FamilyLot2_20180825 = functions.https.onRequest((req, res) => {
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  ref.child('reports/comparative/familylots2/yearly').once('value').then(snapshot => {
+
+    if (snapshot.val()) {
+
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots2/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots2/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots2/sold').transaction(qty => qty = 0).then(() => { });
+
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
+
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
+
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots2/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots2/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots2/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
+
+        console.log(element.val());
+      });
+
+    }
+
+    console.log("getDailyRunningTotal_FamilyLot220180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 4:24am
+exports.F21_getDailyRunningTotal_FamilyLot3_20180825 = functions.https.onRequest((req, res) => {
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  ref.child('reports/comparative/familylots3/yearly').once('value').then(snapshot => {
+
+    if (snapshot.val()) {
+
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots3/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots3/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots3/sold').transaction(qty => qty = 0).then(() => { });
+
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
+
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
+
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots3/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots3/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots3/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
+
+        console.log(element.val());
+      });
+
+    }
+
+    console.log("getDailyRunningTotal_FamilyLot320180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 4:36am
+exports.F22_getDailyRunningTotal_FamilyLot4_20180825 = functions.https.onRequest((req, res) => {
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  ref.child('reports/comparative/familylots4/yearly').once('value').then(snapshot => {
+
+    if (snapshot.val()) {
+
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots4/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots4/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots4/sold').transaction(qty => qty = 0).then(() => { });
+
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
+
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
+
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots4/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots4/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots4/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
+
+        console.log(element.val());
+      });
+
+    }
+
+    console.log("getDailyRunningTotal_FamilyLot420180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 4:48am
+exports.F23_getDailyRunningTotal_FamilyLot5_20180825 = functions.https.onRequest((req, res) => {
+
+  var serverDateTime = new Date();
+  var serverDateTimePH = new Date(serverDateTime);
+  serverDateTimePH.setHours(serverDateTime.getHours() + 8);
+  serverDateTimePH.setDate(serverDateTimePH.getDate() - 1);
+  var serverDatePH_String = serverDateTimePH.getFullYear() + "-" + ("0" + (serverDateTimePH.getMonth() + 1)).slice(-2) + "-" + ("0" + serverDateTimePH.getDate()).slice(-2);
+  var totalHold = 0;
+  var totalReserved = 0;
+  var totalSold = 0;
+
+  ref.child('reports/comparative/familylots5/yearly').once('value').then(snapshot => {
+
+    if (snapshot.val()) {
+
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots5/hold').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots5/reserved').transaction(qty => qty = 0).then(() => { });
+      admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots5/sold').transaction(qty => qty = 0).then(() => { });
+
+      snapshot.forEach(element => {
+        var _totalHold = 0;
+        var _totalReserved = 0;
+        var _totalSold = 0;
+
+        if(element.val().totalHold) _totalHold = element.val().totalHold;
+        if(element.val().totalReserved) _totalReserved = element.val().totalReserved;
+        if(element.val().totalSold) _totalSold = element.val().totalSold;
+
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots5/hold').transaction(qty => qty = qty + _totalHold).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots5/reserved').transaction(qty => qty = qty + _totalReserved).then(() => { });
+        admin.database().ref('/reports/overAll/' + serverDatePH_String + '/lotType/familylots5/sold').transaction(qty => qty = qty + _totalSold).then(() => { });
+
+        console.log(element.val());
+      });
+
+    }
+
+    console.log("getDailyRunningTotal_FamilyLot520180825:ok")
+
+  })
+
+
+  res.status(200).send('ok:getDailyRunningTotal20180825');
+
+});
+
+//schedule everyday, 5:00am
+exports.F24_getDailyRunningTotal_Totals_20180825 = functions.https.onRequest((req, res) => {
 
   var serverDateTime = new Date();
   var serverDateTimePH = new Date(serverDateTime);
@@ -1240,477 +1158,8 @@ exports.getDailyRunningTotal_Totals = functions.https.onRequest((req, res) => {
 
 });
 
-//function until all lots have type_status_inventoriable
-exports.dataCatchupLotTypeStatusInventoriable = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo(null).limitToFirst(250).once('value').then(snapshot => {
-
-    if (snapshot.exists()) {
-
-      snapshot.forEach(element => {
-        // if (snapshot.val().type_status_inventoriable) {
-        admin.database().ref('/lots/' + element.key + '/type_status_inventoriable').transaction(val => val = element.val().type + '_' + element.val().status + '_' + element.val().inventoriable).then(() => { });
-        // }
-      });
-
-    }
-
-    res.status(200).send('ok.dataCatchupLotTypeStatusInventoriable:' + snapshot.numChildren());
-
-  });
-
-});
-
-
-exports.countLotInventoriable = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('inventoriable').equalTo('yes').once('value').then(snapshot => {
-
-    res.status(200).send('ok.countLot.inventoriable:' + snapshot.numChildren());
-  });
-
-});
-
-exports.countLotAll = functions.https.onRequest((req, res) => {
-  ref.child('lots').once('value').then(snapshot => {
-
-    res.status(200).send('ok.countLot.all:' + snapshot.numChildren());
-  });
-
-});
-
-exports.countLotAllLotTypeStatusInventoriable = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo(null).once('value').then(snapshot => {
-
-    res.status(200).send('ok.countLotAllLotTypeStatusInventoriable:' + snapshot.numChildren());
-
-  });
-
-});
-
-
-exports.reportCatchupNov1ToMar8_Day = functions.https.onRequest((req, res) => {
-  ref.child('reports/reportCatchup').once('value').then(currentDate => {
-    var current = currentDate.val().current;
-    var start = currentDate.val().current;
-
-    var d1 = new Date(start);
-    var sdate = new Date(d1);
-    var sdate2 = new Date(d1);
-
-    //per day
-    sdate.setHours(d1.getHours() + 23); //manila +8 offset from UTC
-    sdate.setMinutes(d1.getMinutes() + 59); //manila +8 offset from UTC
-    var end = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
-      + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
-
-    sdate.setMinutes(sdate.getMinutes() + 1); //manila +8 offset from UTC
-    var nextDate = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
-      + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
-
-    if (current <= currentDate.val().end) {
-
-      ref.child('lots').orderByChild('reservationdetails/start').startAt(start).endAt(end).once('value').then(snapshot => {
-
-        snapshot.forEach(element => {
-
-          if (element.val().status != 'notyetavailable' && element.val().status != 'available') {
-            if (element.val().inventoriable == 'yes') {
-              if (element.val().reservationdetails.start) {
-
-                var DataStart = new Date(element.val().reservationdetails.start);
-                var DataStart_noTimeString = DataStart.getFullYear() + "-" + ("0" + (DataStart.getMonth() + 1)).slice(-2) + "-" + ("0" + DataStart.getDate()).slice(-2);
-                var DataStart_noTimeDate = new Date(DataStart_noTimeString);
-                var DataStart_Month = DataStart.getFullYear() + "-" + ("0" + (DataStart.getMonth() + 1)).slice(-2);
-                var DataStart_Year = DataStart.getFullYear();
-                var DataStart_Week = getWeekNumber(DataStart);
-
-                var DataStatus = element.val().status;
-                var Datatype = element.val().type;
-
-                //daily
-                admin.database().ref('/reports/activity/daily/' + DataStart_noTimeString + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/activity/daily/' + DataStart_noTimeString + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                //weekly
-                admin.database().ref('/reports/activity/weekly/' + DataStart_Week + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/activity/weekly/' + DataStart_Week + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                //monthly
-                admin.database().ref('/reports/activity/monthly/' + DataStart_Month + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/activity/monthly/' + DataStart_Month + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                //yearly
-                admin.database().ref('/reports/activity/yearly/' + DataStart_Year + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/activity/yearly/' + DataStart_Year + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                //comparative
-                admin.database().ref('/reports/comparative/' + Datatype + '/daily/' + DataStart_noTimeString + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/comparative/' + Datatype + '/weekly/' + DataStart_Week + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/comparative/' + Datatype + '/monthly/' + DataStart_Month + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/comparative/' + Datatype + '/yearly/' + DataStart_Year + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-
-              }
-            }
-          }
-
-        });
-
-
-        admin.database().ref('reports/reportCatchup/current').transaction(qty => qty = nextDate).then(() => { });
-
-        console.log('ok.reportCatchupNov1ToMar8_Day : ' + current + ' : ' + end + ' : ' + nextDate + ' : ' + snapshot.numChildren());
-
-      });
-    }
-
-
-
-
-
-
-    res.status(200).send(currentDate.val());
-
-
-
-  });
-
-
-
-
-});
-
-exports.reportCatchupNov1ToMar8_Minute = functions.https.onRequest((req, res) => {
-  ref.child('reports/reportCatchup').once('value').then(currentDate => {
-    var current = currentDate.val().current;
-    var start = currentDate.val().current;
-
-    var d1 = new Date(start);
-    var sdate = new Date(d1);
-    var sdate2 = new Date(d1);
-
-    //per 20 minutes
-    sdate.setMinutes(d1.getMinutes() + 19); //manila +8 offset from UTC
-    var end = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
-      + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
-
-    sdate.setMinutes(sdate.getMinutes() + 1); //manila +8 offset from UTC
-    var nextDate = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
-      + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
-
-    if (current <= currentDate.val().end) {
-
-      ref.child('lots').orderByChild('reservationdetails/start').startAt(start).endAt(end).once('value').then(snapshot => {
-
-        snapshot.forEach(element => {
-
-          if (element.val().status != 'notyetavailable' && element.val().status != 'available') {
-            if (element.val().inventoriable == 'yes') {
-              if (element.val().reservationdetails.start) {
-
-                var DataStart = new Date(element.val().reservationdetails.start);
-                var DataStart_noTimeString = DataStart.getFullYear() + "-" + ("0" + (DataStart.getMonth() + 1)).slice(-2) + "-" + ("0" + DataStart.getDate()).slice(-2);
-                var DataStart_noTimeDate = new Date(DataStart_noTimeString);
-                var DataStart_Month = DataStart.getFullYear() + "-" + ("0" + (DataStart.getMonth() + 1)).slice(-2);
-                var DataStart_Year = DataStart.getFullYear();
-                var DataStart_Week = getWeekNumber(DataStart);
-
-                var DataStatus = element.val().status;
-                var Datatype = element.val().type;
-
-                //daily
-                admin.database().ref('/reports/activity/daily/' + DataStart_noTimeString + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/activity/daily/' + DataStart_noTimeString + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                //weekly
-                admin.database().ref('/reports/activity/weekly/' + DataStart_Week + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/activity/weekly/' + DataStart_Week + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                //monthly
-                admin.database().ref('/reports/activity/monthly/' + DataStart_Month + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/activity/monthly/' + DataStart_Month + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                //yearly
-                admin.database().ref('/reports/activity/yearly/' + DataStart_Year + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/activity/yearly/' + DataStart_Year + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                //comparative
-                admin.database().ref('/reports/comparative/' + Datatype + '/daily/' + DataStart_noTimeString + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/comparative/' + Datatype + '/weekly/' + DataStart_Week + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/comparative/' + Datatype + '/monthly/' + DataStart_Month + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                admin.database().ref('/reports/comparative/' + Datatype + '/yearly/' + DataStart_Year + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-
-              }
-            }
-          }
-
-        });
-
-
-        admin.database().ref('reports/reportCatchup/current').transaction(qty => qty = nextDate).then(() => { });
-
-        console.log('ok.reportCatchupNov1ToMar8_Minute : ' + current + ' : ' + end + ' : ' + nextDate + ' : ' + snapshot.numChildren());
-
-      });
-    }
-
-
-    res.status(200).send(currentDate.val());
-
-
-
-
-
-  });
-
-
-});
-
-exports.reportCatchupNov1ToMar8 = functions.https.onRequest((req, res) => {
-  //activity & comparative
-  //daily,weekly,monthly,yearly
-
-  //run in lots
-  //get start (date)
-  //extract for date,week,month,year
-  //+1 in activity, capacity: 500
-  ref.child('reports/reportCatchup').once('value').then(currentDate => {
-    var current = currentDate.val().current;
-    var start = currentDate.val().current;
-
-    var d1 = new Date(start);
-    var sdate = new Date(d1);
-    var sdate2 = new Date(d1);
-
-    sdate2.setMinutes(d1.getMinutes() + 59); //manila +8 offset from UTC
-    var end2 = sdate2.getFullYear() + "-" + ("0" + (sdate2.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate2.getDate()).slice(-2) + "T23:59";
-
-    ref.child('lots').orderByChild('reservationdetails/start').startAt(start).endAt(end2).once('value').then(checkIfDateOnly_exceed50 => {
-      if (checkIfDateOnly_exceed50.numChildren() > 40) {
-        //per 20 minutes
-        sdate.setMinutes(d1.getMinutes() + 19); //manila +8 offset from UTC
-        var end = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
-          + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
-
-        sdate.setMinutes(sdate.getMinutes() + 1); //manila +8 offset from UTC
-        var nextDate = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
-          + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
-
-        if (current <= currentDate.val().end) {
-
-          ref.child('lots').orderByChild('reservationdetails/start').startAt(start).endAt(end).once('value').then(snapshot => {
-
-            snapshot.forEach(element => {
-
-              if (element.val().status != 'notyetavailable' && element.val().status != 'available') {
-                if (element.val().inventoriable == 'yes') {
-                  if (element.val().reservationdetails.start) {
-
-                    var DataStart = new Date(element.val().reservationdetails.start);
-                    var DataStart_noTimeString = DataStart.getFullYear() + "-" + ("0" + (DataStart.getMonth() + 1)).slice(-2) + "-" + ("0" + DataStart.getDate()).slice(-2);
-                    var DataStart_noTimeDate = new Date(DataStart_noTimeString);
-                    var DataStart_Month = DataStart.getFullYear() + "-" + ("0" + (DataStart.getMonth() + 1)).slice(-2);
-                    var DataStart_Year = DataStart.getFullYear();
-                    var DataStart_Week = getWeekNumber(DataStart);
-
-                    var DataStatus = element.val().status;
-                    var Datatype = element.val().type;
-
-                    //daily
-                    admin.database().ref('/reports/activity/daily/' + DataStart_noTimeString + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/activity/daily/' + DataStart_noTimeString + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                    //weekly
-                    admin.database().ref('/reports/activity/weekly/' + DataStart_Week + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/activity/weekly/' + DataStart_Week + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                    //monthly
-                    admin.database().ref('/reports/activity/monthly/' + DataStart_Month + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/activity/monthly/' + DataStart_Month + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                    //yearly
-                    admin.database().ref('/reports/activity/yearly/' + DataStart_Year + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/activity/yearly/' + DataStart_Year + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                    //comparative
-                    admin.database().ref('/reports/comparative/' + Datatype + '/daily/' + DataStart_noTimeString + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/comparative/' + Datatype + '/weekly/' + DataStart_Week + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/comparative/' + Datatype + '/monthly/' + DataStart_Month + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/comparative/' + Datatype + '/yearly/' + DataStart_Year + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-
-                  }
-                }
-              }
-
-            });
-
-
-            admin.database().ref('reports/reportCatchup/current').transaction(qty => qty = nextDate).then(() => { });
-
-            console.log('ok.reportCatchupNov1ToMar8 : ' + current + ' : ' + end + ' : ' + nextDate + ' : ' + snapshot.numChildren());
-
-          });
-        }
-
-      }
-      else {
-        //per day
-        sdate.setHours(d1.getHours() + 23); //manila +8 offset from UTC
-        sdate.setMinutes(d1.getMinutes() + 59); //manila +8 offset from UTC
-        var end = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
-          + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
-
-        sdate.setMinutes(sdate.getMinutes() + 1); //manila +8 offset from UTC
-        var nextDate = sdate.getFullYear() + "-" + ("0" + (sdate.getMonth() + 1)).slice(-2) + "-" + ("0" + sdate.getDate()).slice(-2)
-          + "T" + ("0" + (sdate.getHours())).slice(-2) + ":" + ("0" + sdate.getMinutes()).slice(-2);
-
-        if (current <= currentDate.val().end) {
-
-          ref.child('lots').orderByChild('reservationdetails/start').startAt(start).endAt(end).once('value').then(snapshot => {
-
-            snapshot.forEach(element => {
-
-              if (element.val().status != 'notyetavailable' && element.val().status != 'available') {
-                if (element.val().inventoriable == 'yes') {
-                  if (element.val().reservationdetails.start) {
-
-                    var DataStart = new Date(element.val().reservationdetails.start);
-                    var DataStart_noTimeString = DataStart.getFullYear() + "-" + ("0" + (DataStart.getMonth() + 1)).slice(-2) + "-" + ("0" + DataStart.getDate()).slice(-2);
-                    var DataStart_noTimeDate = new Date(DataStart_noTimeString);
-                    var DataStart_Month = DataStart.getFullYear() + "-" + ("0" + (DataStart.getMonth() + 1)).slice(-2);
-                    var DataStart_Year = DataStart.getFullYear();
-                    var DataStart_Week = getWeekNumber(DataStart);
-
-                    var DataStatus = element.val().status;
-                    var Datatype = element.val().type;
-
-                    //daily
-                    admin.database().ref('/reports/activity/daily/' + DataStart_noTimeString + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/activity/daily/' + DataStart_noTimeString + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                    //weekly
-                    admin.database().ref('/reports/activity/weekly/' + DataStart_Week + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/activity/weekly/' + DataStart_Week + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                    //monthly
-                    admin.database().ref('/reports/activity/monthly/' + DataStart_Month + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/activity/monthly/' + DataStart_Month + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                    //yearly
-                    admin.database().ref('/reports/activity/yearly/' + DataStart_Year + '/lotType/' + Datatype + '/' + DataStatus).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/activity/yearly/' + DataStart_Year + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-                    //comparative
-                    admin.database().ref('/reports/comparative/' + Datatype + '/daily/' + DataStart_noTimeString + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/comparative/' + Datatype + '/weekly/' + DataStart_Week + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/comparative/' + Datatype + '/monthly/' + DataStart_Month + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-                    admin.database().ref('/reports/comparative/' + Datatype + '/yearly/' + DataStart_Year + '/total' + jsUcfirst(DataStatus)).transaction(qty => qty = Number(qty) + 1).then(() => { });
-
-
-                  }
-                }
-              }
-
-            });
-
-
-            admin.database().ref('reports/reportCatchup/current').transaction(qty => qty = nextDate).then(() => { });
-
-            console.log('ok.reportCatchupNov1ToMar8 : ' + current + ' : ' + end + ' : ' + nextDate + ' : ' + snapshot.numChildren());
-          });
-        }
-
-      }
-
-    });
-
-
-
-    res.status(200).send(currentDate.val());
-
-
-
-  });
-});
-
-
-
-const getWeekNumber = (d) => {
-  var dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  var year = d.getUTCFullYear().toString().substring(2, 4);
-  var week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7)
-  if (week < 10) { week = '0' + week };
-  return year + 'w' + week;
-};
-
-const jsUcfirst = (xstring) => {
-  return xstring.charAt(0).toUpperCase() + xstring.slice(1);
-}
-
-const getStatusColors = () => {
-  return admin.database().ref('/statuscolor').once('value').then(snap => {
-    return snap.val();
-  });
-}
-
-const getNextReservation = (lotKey, currentReservationKey, currentServerDateTime) => {
-  return admin.database().ref('/reservations/' + lotKey).orderByChild('start').startAt(currentServerDateTime).limitToFirst(2).once('value').then(snap => {
-    return snap.val();
-    //SHB note: will check later if the ff will matter:
-    //01/01/2018 - Hold Expires
-    //01/10/2018 - Reservation Starts
-    //01/02 - 09,2018 - Available --- also as current date = 01/03/2018
-  });
-}
-
-const getMapLotStatus = (mapLot, level) => {
-  if (level) {
-    return admin.database().ref('/lots').orderByChild('map_lot').equalTo(mapLot).limitToFirst(5).once('value').then(snap => {
-      if (snap.exists()) {
-        var winningValStat = 0;
-        snap.forEach(element => {
-          var valStat = 0;
-          var stat = element.val().status;
-          if (stat) {
-            if (stat === 'available') valStat = 5;
-            else if (stat === 'hold') valStat = 4;
-            else if (stat === 'reserved') valStat = 3;
-            else if (stat === 'soldlacking') valStat = 2;
-            else if (stat === 'sold') valStat = 1;
-            else valStat = 0; //notyetavailable
-          }
-          if (valStat > winningValStat) {
-            winningValStat = valStat;
-          }
-        });
-
-        if (winningValStat == 5) return Promise.resolve('available');
-        else if (winningValStat == 4) return Promise.resolve('hold');
-        else if (winningValStat == 3) return Promise.resolve('reserved');
-        else if (winningValStat == 2) return Promise.resolve('soldlacking');
-        else if (winningValStat == 1) return Promise.resolve('sold');
-        else return Promise.resolve('notyetavailable');
-
-      }
-      else {
-        return Promise.resolve('notyetavailable');
-      }
-    }).catch(function (error) {
-      return Promise.resolve('notyetavailable');
-    });
-  }
-  else {
-    return Promise.resolve(null);
-  }
-
-
-}
-
-
-exports.reservationReportsReset = functions.https.onRequest((req, res) => {
+//schedule everyday, 5:30am
+exports.F25_reservationReportsReset = functions.https.onRequest((req, res) => {
   var updatePathsAtOnce = {};
   updatePathsAtOnce['/reports/lotstatus/Today'] = {
     bonechamber: {
@@ -1811,520 +1260,79 @@ exports.reservationReportsReset = functions.https.onRequest((req, res) => {
 
 });
 
-exports.getOverallTotalInventory_LawnLots_Available = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo('lawnlots_available_yes').once('value').then(snapshot => {
-    res.status(200).send('ok:getOverallTotalInventory_LawnLots_Available:' + snapshot.numChildren());
+//****************** SHB 2018.08.25 6pm */ />
+
+
+const getWeekNumber = (d) => {
+  var dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  var year = d.getUTCFullYear().toString().substring(2, 4);
+  var week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7)
+  if (week < 10) { week = '0' + week };
+  return year + 'w' + week;
+};
+
+const jsUcfirst = (xstring) => {
+  return xstring.charAt(0).toUpperCase() + xstring.slice(1);
+}
+
+const getStatusColors = () => {
+  return admin.database().ref('/statuscolor').once('value').then(snap => {
+    return snap.val();
   });
-});
+}
 
-exports.getOverallTotalInventory_LawnLots_nya = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo('lawnlots_notyetavailable_yes').once('value').then(snapshot => {
-    res.status(200).send('ok:getOverallTotalInventory_LawnLots_Notyetavailable:' + snapshot.numChildren());
+const getNextReservation = (lotKey, currentReservationKey, currentServerDateTime) => {
+  return admin.database().ref('/reservations/' + lotKey).orderByChild('start').startAt(currentServerDateTime).limitToFirst(2).once('value').then(snap => {
+    return snap.val();
+    //SHB note: will check later if the ff will matter:
+    //01/01/2018 - Hold Expires
+    //01/10/2018 - Reservation Starts
+    //01/02 - 09,2018 - Available --- also as current date = 01/03/2018
   });
-});
+}
 
-exports.getOverallTotalInventory_WallNiche_Available = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo('wallniche_available_yes').once('value').then(snapshot => {
-    res.status(200).send('ok:getOverallTotalInventory_WallNiche_Available:' + snapshot.numChildren());
-  });
-});
+const getMapLotStatus = (mapLot, level) => {
+  if (level) {
+    return admin.database().ref('/lots').orderByChild('map_lot').equalTo(mapLot).limitToFirst(5).once('value').then(snap => {
+      if (snap.exists()) {
+        var winningValStat = 0;
+        snap.forEach(element => {
+          var valStat = 0;
+          var stat = element.val().status;
+          if (stat) {
+            if (stat === 'available') valStat = 5;
+            else if (stat === 'hold') valStat = 4;
+            else if (stat === 'reserved') valStat = 3;
+            else if (stat === 'soldlacking') valStat = 2;
+            else if (stat === 'sold') valStat = 1;
+            else valStat = 0; //notyetavailable
+          }
+          if (valStat > winningValStat) {
+            winningValStat = valStat;
+          }
+        });
 
-exports.getOverallTotalInventory_WallNiche_nya = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo('wallniche_notyetavailable_yes').once('value').then(snapshot => {
-    res.status(200).send('ok:getOverallTotalInventory_WallNiche_Notyetavailable:' + snapshot.numChildren());
-  });
-});
+        if (winningValStat == 5) return Promise.resolve('available');
+        else if (winningValStat == 4) return Promise.resolve('hold');
+        else if (winningValStat == 3) return Promise.resolve('reserved');
+        else if (winningValStat == 2) return Promise.resolve('soldlacking');
+        else if (winningValStat == 1) return Promise.resolve('sold');
+        else return Promise.resolve('notyetavailable');
 
-exports.getOverallTotalInventory_BoneChamber_Available = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo('bonechamber_available_yes').once('value').then(snapshot => {
-    res.status(200).send('ok:getOverallTotalInventory_BoneChamber_Available:' + snapshot.numChildren());
-  });
-});
-
-exports.getOverallTotalInventory_BoneChamber_nya = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo('bonechamber_notyetavailable_yes').once('value').then(snapshot => {
-    res.status(200).send('ok:getOverallTotalInventory_BoneChamber_Notyetavailable:' + snapshot.numChildren());
-  });
-});
-
-exports.getOverallTotalInventory_Cinerarium_Available = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo('cinerarium_available_yes').once('value').then(snapshot => {
-    res.status(200).send('ok:getOverallTotalInventory_Cinerarium_Available:' + snapshot.numChildren());
-  });
-});
-
-exports.getOverallTotalInventory_Cinerarium_nya = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type_status_inventoriable').equalTo('cinerarium_notyetavailable_yes').once('value').then(snapshot => {
-    res.status(200).send('ok:getOverallTotalInventory_Cinerarium_Notyetavailable:' + snapshot.numChildren());
-  });
-});
-
-
-exports.getOverallTotalInventory_GardenLots = functions.https.onRequest((req, res) => {
-  // identofy type_status_invetoriable to query
-  var toQuery = [
-    //gardenlots1
-    {
-      c0: 'gardenlots1_available_yes',
-      c1: 'gardenlots1',
-      c2: 'available'
-    },
-    {
-      c0: 'gardenlots1_notyetavailable_yes',
-      c1: 'gardenlots1',
-      c2: 'notyetavailable'
-    },
-    //gardenlots2
-    {
-      c0: 'gardenlots2_available_yes',
-      c1: 'gardenlots2',
-      c2: 'available'
-    },
-    {
-      c0: 'gardenlots2_notyetavailable_yes',
-      c1: 'gardenlots2',
-      c2: 'notyetavailable'
-    },
-    //gardenlots3
-    {
-      c0: 'gardenlots3_available_yes',
-      c1: 'gardenlots3',
-      c2: 'available'
-    },
-    {
-      c0: 'gardenlots3_notyetavailable_yes',
-      c1: 'gardenlots3',
-      c2: 'notyetavailable'
-    },
-    //gardenlots4
-    {
-      c0: 'gardenlots4_available_yes',
-      c1: 'gardenlots4',
-      c2: 'available'
-    },
-    {
-      c0: 'gardenlots4_notyetavailable_yes',
-      c1: 'gardenlots4',
-      c2: 'notyetavailable'
-    },
-    //gardenlots5
-    {
-      c0: 'gardenlots5_available_yes',
-      c1: 'gardenlots5',
-      c2: 'available'
-    },
-    {
-      c0: 'gardenlots5_notyetavailable_yes',
-      c1: 'gardenlots5',
-      c2: 'notyetavailable'
-    }
-  ]
-
-
-  toQuery.forEach(que => {
-    // query to firebase
-    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
-
-      var numOfChildren = snapshot.numChildren();
-
-      admin.database().ref('/reports/overallTotalInventory/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = Number(qty) + numOfChildren).then(() => { });
-
-
+      }
+      else {
+        return Promise.resolve('notyetavailable');
+      }
+    }).catch(function (error) {
+      return Promise.resolve('notyetavailable');
     });
+  }
+  else {
+    return Promise.resolve(null);
+  }
 
-    console.log(que.c1 + '-' + que.c2 + ":ok:")
 
-  })
+}
 
-  res.status(200).send('ok:getOverallTotalInventory_GardenLots');
-
-});
-
-exports.getOverallTotalInventory_FamilyLots = functions.https.onRequest((req, res) => {
-  // identofy type_status_invetoriable to query
-  var toQuery = [
-    //familylots1
-    {
-      c0: 'familylots1_available_yes',
-      c1: 'familylots1',
-      c2: 'available'
-    },
-    {
-      c0: 'familylots1_notyetavailable_yes',
-      c1: 'familylots1',
-      c2: 'notyetavailable'
-    },
-    //familylots2
-    {
-      c0: 'familylots2_available_yes',
-      c1: 'familylots2',
-      c2: 'available'
-    },
-    {
-      c0: 'familylots2_notyetavailable_yes',
-      c1: 'familylots2',
-      c2: 'notyetavailable'
-    },
-    //familylots3
-    {
-      c0: 'familylots3_available_yes',
-      c1: 'familylots3',
-      c2: 'available'
-    },
-    {
-      c0: 'familylots3_notyetavailable_yes',
-      c1: 'familylots3',
-      c2: 'notyetavailable'
-    },
-    //familylots4
-    {
-      c0: 'familylots4_available_yes',
-      c1: 'familylots4',
-      c2: 'available'
-    },
-    {
-      c0: 'familylots4_notyetavailable_yes',
-      c1: 'familylots4',
-      c2: 'notyetavailable'
-    },
-    //familylots5
-    {
-      c0: 'familylots5_available_yes',
-      c1: 'familylots5',
-      c2: 'available'
-    },
-    {
-      c0: 'familylots5_notyetavailable_yes',
-      c1: 'familylots5',
-      c2: 'notyetavailable'
-    }
-  ]
-
-
-  toQuery.forEach(que => {
-    // query to firebase
-    ref.child('lots').orderByChild('type_status_inventoriable').equalTo(que.c0).once('value').then(snapshot => {
-
-      var numOfChildren = snapshot.numChildren();
-
-      admin.database().ref('/reports/overallTotalInventory/lotType/' + que.c1 + '/' + que.c2).transaction(qty => qty = Number(qty) + numOfChildren).then(() => { });
-
-
-    });
-
-    console.log(que.c1 + '-' + que.c2 + ":ok:")
-
-  })
-
-  res.status(200).send('ok:getOverallTotalInventory_FamilyLots');
-
-});
-
-
-exports.getLawnLotsError = functions.https.onRequest((req, res) => {
-  ref.child('lots').orderByChild('type').equalTo('Lawn Lots').once('value').then(snapshot => {
-    snapshot.forEach(element => {
-      console.log('getLawnLotsError:' + element.key);
-
-    });
-    res.status(200).send('ok:getLawnLotsError:' + snapshot.numChildren());
-  });
-});
-
-// exports.updateblock4part1_5_9_13 = functions.https.onRequest((req, res) => {
-//   ref.child('lots').orderByChild('part').equalTo('block4part1').once('value').then(snapshot => {
-//     if (snapshot.exists()) {
-//       getStatusColors().then(statusColors => {
-//         snapshot.forEach(element => {
-//           if (element.val().status === 'notyetavailable') {
-//             var myupdate = {};
-//             myupdate['/lots/' + element.key + '/status'] = 'available';
-//             myupdate['/lots/' + element.key + '/maprenderdetails/bg_color'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].bg_color : 'gray');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/fore_color'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].fore_color : 'white');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/status_name'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].name : '');
-
-//             ref.update(myupdate).then(function () {
-//               console.log("Write completed")
-//             }).catch(function (error) {
-//               console.log(error)
-//             });
-//           }
-
-//         });
-
-//         res.status(200).send('block4part1:ok:' + snapshot.numChildren());
-
-//       }).catch(reason => {
-//         res.status(200).send('block4part1:error: ' + reason);
-//       });
-
-//     }
-//     else {
-//       // res.status(200).send('Map Render Details Updates in status color: snapshot null');
-//       console.log('block4part1, null');
-//     }
-
-//   }).catch(reason => {
-//     res.status(200).send('block4part1:error: ' + reason);
-//   });
-
-//   ref.child('lots').orderByChild('part').equalTo('block4part5').once('value').then(snapshot => {
-//     if (snapshot.exists()) {
-//       getStatusColors().then(statusColors => {
-//         snapshot.forEach(element => {
-//           if (element.val().status === 'notyetavailable') {
-//             var myupdate = {};
-//             myupdate['/lots/' + element.key + '/status'] = 'available';
-//             myupdate['/lots/' + element.key + '/maprenderdetails/bg_color'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].bg_color : 'gray');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/fore_color'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].fore_color : 'white');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/status_name'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].name : '');
-
-//             ref.update(myupdate).then(function () {
-//               console.log("Write completed")
-//             }).catch(function (error) {
-//               console.log(error)
-//             });
-//           }
-
-//         });
-
-//         res.status(200).send('block4part5:ok:' + snapshot.numChildren());
-
-//       }).catch(reason => {
-//         res.status(200).send('block4part5:error: ' + reason);
-//       });
-
-//     }
-//     else {
-//       // res.status(200).send('Map Render Details Updates in status color: snapshot null');
-//       console.log('block4part5, null');
-//     }
-
-//   }).catch(reason => {
-//     res.status(200).send('block4part5:error: ' + reason);
-//   });
-
-//   ref.child('lots').orderByChild('part').equalTo('block4part9').once('value').then(snapshot => {
-//     if (snapshot.exists()) {
-//       getStatusColors().then(statusColors => {
-//         snapshot.forEach(element => {
-//           if (element.val().status === 'notyetavailable') {
-//             var myupdate = {};
-//             myupdate['/lots/' + element.key + '/status'] = 'available';
-//             myupdate['/lots/' + element.key + '/maprenderdetails/bg_color'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].bg_color : 'gray');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/fore_color'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].fore_color : 'white');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/status_name'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].name : '');
-
-//             ref.update(myupdate).then(function () {
-//               console.log("Write completed")
-//             }).catch(function (error) {
-//               console.log(error)
-//             });
-//           }
-
-//         });
-
-//         res.status(200).send('block4part9:ok:' + snapshot.numChildren());
-
-//       }).catch(reason => {
-//         res.status(200).send('block4part9:error: ' + reason);
-//       });
-
-//     }
-//     else {
-//       // res.status(200).send('Map Render Details Updates in status color: snapshot null');
-//       console.log('block4part9, null');
-//     }
-
-//   }).catch(reason => {
-//     res.status(200).send('block4part9:error: ' + reason);
-//   });  
-
-//   ref.child('lots').orderByChild('part').equalTo('block4part13').once('value').then(snapshot => {
-//     if (snapshot.exists()) {
-//       getStatusColors().then(statusColors => {
-//         snapshot.forEach(element => {
-//           if (element.val().status === 'notyetavailable') {
-//             var myupdate = {};
-//             myupdate['/lots/' + element.key + '/status'] = 'available';
-//             myupdate['/lots/' + element.key + '/maprenderdetails/bg_color'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].bg_color : 'gray');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/fore_color'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].fore_color : 'white');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/status_name'] = (typeof (statusColors['available']) != 'undefined' ? statusColors['available'].name : '');
-
-//             ref.update(myupdate).then(function () {
-//               console.log("Write completed")
-//             }).catch(function (error) {
-//               console.log(error)
-//             });
-//           }
-
-//         });
-
-//         res.status(200).send('block4part13:ok:' + snapshot.numChildren());
-
-//       }).catch(reason => {
-//         res.status(200).send('block4part13:error: ' + reason);
-//       });
-
-//     }
-//     else {
-//       // res.status(200).send('Map Render Details Updates in status color: snapshot null');
-//       console.log('block4part13, null');
-//     }
-
-//   }).catch(reason => {
-//     res.status(200).send('block4part13:error: ' + reason);
-//   });  
-
-// });
-
-// exports.updateblock4part1_5_9_13_nya = functions.https.onRequest((req, res) => {
-//   ref.child('lots').orderByChild('part').equalTo('block4part1').once('value').then(snapshot => {
-//     if (snapshot.exists()) {
-//       getStatusColors().then(statusColors => {
-//         snapshot.forEach(element => {
-//           if (element.val().status === 'available' && element.val().designation === 'regular') {
-//             var myupdate = {};
-//             myupdate['/lots/' + element.key + '/status'] = 'notyetavailable';
-//             myupdate['/lots/' + element.key + '/maprenderdetails/bg_color'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].bg_color : 'gray');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/fore_color'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].fore_color : 'white');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/status_name'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].name : '');
-//             myupdate['/lots/' + element.key + '/type_status_inventoriable'] = element.val().type + '_notyetavailable_' + element.val().inventoriable;
-
-//             ref.update(myupdate).then(function () {
-//               console.log("Write completed")
-//             }).catch(function (error) {
-//               console.log(error)
-//             });
-//           }
-
-//         });
-
-//         res.status(200).send('block4part1:ok:' + snapshot.numChildren());
-
-//       }).catch(reason => {
-//         res.status(200).send('block4part1:error: ' + reason);
-//       });
-
-//     }
-//     else {
-//       // res.status(200).send('Map Render Details Updates in status color: snapshot null');
-//       console.log('block4part1, null');
-//     }
-
-//   }).catch(reason => {
-//     res.status(200).send('block4part1:error: ' + reason);
-//   });
-
-//   ref.child('lots').orderByChild('part').equalTo('block4part5').once('value').then(snapshot => {
-//     if (snapshot.exists()) {
-//       getStatusColors().then(statusColors => {
-//         snapshot.forEach(element => {
-//           if (element.val().status === 'available' && element.val().designation === 'regular') {
-//             var myupdate = {};
-//             myupdate['/lots/' + element.key + '/status'] = 'notyetavailable';
-//             myupdate['/lots/' + element.key + '/maprenderdetails/bg_color'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].bg_color : 'gray');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/fore_color'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].fore_color : 'white');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/status_name'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].name : '');
-//             myupdate['/lots/' + element.key + '/type_status_inventoriable'] = element.val().type + '_notyetavailable_' + element.val().inventoriable;
-
-//             ref.update(myupdate).then(function () {
-//               console.log("Write completed")
-//             }).catch(function (error) {
-//               console.log(error)
-//             });
-//           }
-
-//         });
-
-//         res.status(200).send('block4part5:ok:' + snapshot.numChildren());
-
-//       }).catch(reason => {
-//         res.status(200).send('block4part5:error: ' + reason);
-//       });
-
-//     }
-//     else {
-//       // res.status(200).send('Map Render Details Updates in status color: snapshot null');
-//       console.log('block4part5, null');
-//     }
-
-//   }).catch(reason => {
-//     res.status(200).send('block4part5:error: ' + reason);
-//   });
-
-//   ref.child('lots').orderByChild('part').equalTo('block4part9').once('value').then(snapshot => {
-//     if (snapshot.exists()) {
-//       getStatusColors().then(statusColors => {
-//         snapshot.forEach(element => {
-//           if (element.val().status === 'available' && element.val().designation === 'regular') {
-//             var myupdate = {};
-//             myupdate['/lots/' + element.key + '/status'] = 'notyetavailable';
-//             myupdate['/lots/' + element.key + '/maprenderdetails/bg_color'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].bg_color : 'gray');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/fore_color'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].fore_color : 'white');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/status_name'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].name : '');
-//             myupdate['/lots/' + element.key + '/type_status_inventoriable'] = element.val().type + '_notyetavailable_' + element.val().inventoriable;
-
-//             ref.update(myupdate).then(function () {
-//               console.log("Write completed")
-//             }).catch(function (error) {
-//               console.log(error)
-//             });
-//           }
-
-//         });
-
-//         res.status(200).send('block4part9:ok:' + snapshot.numChildren());
-
-//       }).catch(reason => {
-//         res.status(200).send('block4part9:error: ' + reason);
-//       });
-
-//     }
-//     else {
-//       // res.status(200).send('Map Render Details Updates in status color: snapshot null');
-//       console.log('block4part9, null');
-//     }
-
-//   }).catch(reason => {
-//     res.status(200).send('block4part9:error: ' + reason);
-//   });  
-
-//   ref.child('lots').orderByChild('part').equalTo('block4part13').once('value').then(snapshot => {
-//     if (snapshot.exists()) {
-//       getStatusColors().then(statusColors => {
-//         snapshot.forEach(element => {
-//           if (element.val().status === 'available' && element.val().designation === 'regular') {
-//             var myupdate = {};
-//             myupdate['/lots/' + element.key + '/status'] = 'notyetavailable';
-//             myupdate['/lots/' + element.key + '/maprenderdetails/bg_color'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].bg_color : 'gray');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/fore_color'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].fore_color : 'white');
-//             myupdate['/lots/' + element.key + '/maprenderdetails/status_name'] = (typeof (statusColors['notyetavailable']) != 'undefined' ? statusColors['notyetavailable'].name : '');
-//             myupdate['/lots/' + element.key + '/type_status_inventoriable'] = element.val().type + '_notyetavailable_' + element.val().inventoriable;
-
-//             ref.update(myupdate).then(function () {
-//               console.log("Write completed")
-//             }).catch(function (error) {
-//               console.log(error)
-//             });
-//           }
-
-//         });
-
-//         res.status(200).send('block4part13:ok:' + snapshot.numChildren());
-
-//       }).catch(reason => {
-//         res.status(200).send('block4part13:error: ' + reason);
-//       });
-
-//     }
-//     else {
-//       // res.status(200).send('Map Render Details Updates in status color: snapshot null');
-//       console.log('block4part13, null');
-//     }
-
-//   }).catch(reason => {
-//     res.status(200).send('block4part13:error: ' + reason);
-//   });  
-
-// });
