@@ -1234,7 +1234,7 @@ exports.F25_reservationReportsReset = functions.https.onRequest((req, res) => {
     }
   };
 
-  updatePathsAtOnce['/reports/forUpdate'] = null;
+  //updatePathsAtOnce['/reports/forUpdate20180825'] = null;
 
   updatePathsAtOnce['/reports/overallTotalInventory/lotType/bonechamber/added'] = false;
   updatePathsAtOnce['/reports/overallTotalInventory/lotType/cinerarium/added'] = false;
